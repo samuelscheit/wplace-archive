@@ -1,257 +1,133 @@
+#include "pumpkin_core.h"
 #include <node_api.h>
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {
-	uint16_t dx;
-	uint16_t dy;
-	uint8_t rgba[4];
-} sample_pixel_t;
+#define NAPI_CALL(env, call)                                                   \
+  do {                                                                         \
+    napi_status status = (call);                                               \
+    if (status != napi_ok) {                                                   \
+      const napi_extended_error_info *info;                                    \
+      napi_get_last_error_info((env), &info);                                  \
+      const char *message = info ? info->error_message : "Unknown error";      \
+      napi_throw_error((env), NULL, message);                                  \
+      return NULL;                                                             \
+    }                                                                          \
+  } while (0)
 
-static sample_pixel_t *pumpkin_pixels = NULL;
-static uint32_t pumpkin_width = 0;
-static uint32_t pumpkin_height = 0;
-static uint32_t pumpkin_channels = 0;
-static size_t pumpkin_pixel_count = 0;
-static uint16_t first_pixel_dx = 0;
-static uint16_t first_pixel_dy = 0;
+static pumpkin_t g_pumpkin = {0};
 
-#define NAPI_CALL(env, call)                     \
-	do {                                         \
-		napi_status status = (call);            \
-		if (status != napi_ok) {                \
-			const napi_extended_error_info *info; \
-			napi_get_last_error_info((env), &info); \
-			const char *message = info ? info->error_message : "Unknown error"; \
-			napi_throw_error((env), NULL, message); \
-			return NULL;                        \
-		}                                        \
-	} while (0)
+static napi_value js_set_pumpkin(napi_env env, napi_callback_info info) {
+  size_t argc = 4;
+  napi_value argv[4];
+  NAPI_CALL(env, napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
 
-static void clear_pumpkin_pixels(void) {
-	if (pumpkin_pixels != NULL) {
-		free(pumpkin_pixels);
-		pumpkin_pixels = NULL;
-	}
-	pumpkin_pixel_count = 0;
-	pumpkin_width = 0;
-	pumpkin_height = 0;
-	pumpkin_channels = 0;
-	first_pixel_dx = 0;
-	first_pixel_dy = 0;
+  if (argc < 4) {
+    napi_throw_type_error(env, NULL,
+                          "Expected buffer, width, height, channels");
+    return NULL;
+  }
+
+  void *data_ptr;
+  size_t data_len;
+  uint32_t w, h, c;
+
+  NAPI_CALL(env, napi_get_buffer_info(env, argv[0], &data_ptr, &data_len));
+  NAPI_CALL(env, napi_get_value_uint32(env, argv[1], &w));
+  NAPI_CALL(env, napi_get_value_uint32(env, argv[2], &h));
+  NAPI_CALL(env, napi_get_value_uint32(env, argv[3], &c));
+
+  size_t expected = (size_t)w * h * c;
+  if (data_len < expected) {
+    napi_throw_range_error(env, NULL, "Buffer smaller than expected");
+    return NULL;
+  }
+
+  if (!pumpkin_init(&g_pumpkin, data_ptr, w, h, c)) {
+    napi_throw_error(env, NULL, "Failed to init pumpkin");
+    return NULL;
+  }
+
+  napi_value result;
+  NAPI_CALL(env,
+            napi_create_uint32(env, (uint32_t)g_pumpkin.pixel_count, &result));
+  return result;
 }
 
-static napi_value set_pumpkin_data(napi_env env, napi_callback_info info) {
-	size_t argc = 4;
-	napi_value argv[4];
-	NAPI_CALL(env, napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
+static napi_value js_find_pumpkin(napi_env env, napi_callback_info info) {
+  size_t argc = 4;
+  napi_value argv[4];
+  NAPI_CALL(env, napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
 
-	if (argc < 4) {
-		napi_throw_type_error(env, NULL, "Expected buffer, width, height, and channels");
-		return NULL;
-	}
+  if (!g_pumpkin.rgba) {
+    napi_throw_error(env, NULL, "Pumpkin not initialized");
+    return NULL;
+  }
 
-	void *data_ptr;
-	size_t data_length;
-	NAPI_CALL(env, napi_get_buffer_info(env, argv[0], &data_ptr, &data_length));
+  void *data_ptr;
+  size_t data_len;
+  uint32_t w, h, c;
 
-	uint32_t width;
-	uint32_t height;
-	uint32_t channels;
-	NAPI_CALL(env, napi_get_value_uint32(env, argv[1], &width));
-	NAPI_CALL(env, napi_get_value_uint32(env, argv[2], &height));
-	NAPI_CALL(env, napi_get_value_uint32(env, argv[3], &channels));
+  NAPI_CALL(env, napi_get_buffer_info(env, argv[0], &data_ptr, &data_len));
+  NAPI_CALL(env, napi_get_value_uint32(env, argv[1], &w));
+  NAPI_CALL(env, napi_get_value_uint32(env, argv[2], &h));
+  NAPI_CALL(env, napi_get_value_uint32(env, argv[3], &c));
 
-	if (channels != 4) {
-		napi_throw_range_error(env, NULL, "Pumpkin image must have 4 channels");
-		return NULL;
-	}
+  size_t expected = (size_t)w * h * c;
+  if (data_len < expected) {
+    napi_throw_range_error(env, NULL, "Buffer smaller than expected");
+    return NULL;
+  }
 
-	size_t expected_length = (size_t)width * (size_t)height * (size_t)channels;
-	if (data_length < expected_length) {
-		napi_throw_range_error(env, NULL, "Pumpkin buffer is smaller than expected");
-		return NULL;
-	}
+  uint32_t fx = 0, fy = 0;
+  bool found = pumpkin_find(&g_pumpkin, data_ptr, w, h, c, &fx, &fy);
 
-	const uint8_t *pixels = (const uint8_t *)data_ptr;
+  if (!found) {
+    napi_value null_value;
+    NAPI_CALL(env, napi_get_null(env, &null_value));
+    return null_value;
+  }
 
-	size_t opaque_count = 0;
-	for (uint32_t y = 0; y < height; y++) {
-		for (uint32_t x = 0; x < width; x++) {
-			size_t idx = ((size_t)y * (size_t)width + (size_t)x) * (size_t)channels;
-			if (pixels[idx + 3] == 255) {
-				if (opaque_count == 0) {
-					first_pixel_dx = (uint16_t)x;
-					first_pixel_dy = (uint16_t)y;
-				}
-				opaque_count++;
-			}
-		}
-	}
-
-	if (opaque_count == 0) {
-		napi_throw_range_error(env, NULL, "Pumpkin image has no fully opaque pixels");
-		return NULL;
-	}
-
-	sample_pixel_t *new_pixels = (sample_pixel_t *)malloc(sizeof(sample_pixel_t) * opaque_count);
-	if (new_pixels == NULL) {
-		napi_throw_error(env, NULL, "Failed to allocate memory for pumpkin pixels");
-		return NULL;
-	}
-
-	size_t write_index = 0;
-	for (uint32_t y = 0; y < height; y++) {
-		for (uint32_t x = 0; x < width; x++) {
-			size_t idx = ((size_t)y * (size_t)width + (size_t)x) * (size_t)channels;
-			if (pixels[idx + 3] == 255) {
-				sample_pixel_t *sample = &new_pixels[write_index++];
-				sample->dx = (uint16_t)x;
-				sample->dy = (uint16_t)y;
-				memcpy(sample->rgba, &pixels[idx], 4);
-			}
-		}
-	}
-
-	clear_pumpkin_pixels();
-
-	pumpkin_pixels = new_pixels;
-	pumpkin_pixel_count = opaque_count;
-	pumpkin_width = width;
-	pumpkin_height = height;
-	pumpkin_channels = channels;
-
-	return NULL;
+  napi_value obj, xval, yval;
+  NAPI_CALL(env, napi_create_object(env, &obj));
+  NAPI_CALL(env, napi_create_uint32(env, fx, &xval));
+  NAPI_CALL(env, napi_create_uint32(env, fy, &yval));
+  NAPI_CALL(env, napi_set_named_property(env, obj, "x", xval));
+  NAPI_CALL(env, napi_set_named_property(env, obj, "y", yval));
+  return obj;
 }
 
-static napi_value find_pumpkin(napi_env env, napi_callback_info info) {
-	if (pumpkin_pixels == NULL || pumpkin_pixel_count == 0) {
-		napi_throw_error(env, NULL, "Pumpkin data not initialized");
-		return NULL;
-	}
-
-	size_t argc = 4;
-	napi_value argv[4];
-	NAPI_CALL(env, napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
-
-	if (argc < 4) {
-		napi_throw_type_error(env, NULL, "Expected buffer, width, height, and channels");
-		return NULL;
-	}
-
-	void *data_ptr;
-	size_t data_length;
-	NAPI_CALL(env, napi_get_buffer_info(env, argv[0], &data_ptr, &data_length));
-
-	uint32_t width;
-	uint32_t height;
-	uint32_t channels;
-	NAPI_CALL(env, napi_get_value_uint32(env, argv[1], &width));
-	NAPI_CALL(env, napi_get_value_uint32(env, argv[2], &height));
-	NAPI_CALL(env, napi_get_value_uint32(env, argv[3], &channels));
-
-	if (channels != 4) {
-		napi_throw_range_error(env, NULL, "Search image must have 4 channels");
-		return NULL;
-	}
-
-	size_t expected_length = (size_t)width * (size_t)height * (size_t)channels;
-	if (data_length < expected_length) {
-		napi_throw_range_error(env, NULL, "Search buffer is smaller than expected");
-		return NULL;
-	}
-
-	if (width < pumpkin_width || height < pumpkin_height) {
-		napi_value null_value;
-		NAPI_CALL(env, napi_get_null(env, &null_value));
-		return null_value;
-	}
-
-	const uint8_t *search_pixels = (const uint8_t *)data_ptr;
-
-	uint32_t max_x = width - pumpkin_width;
-	uint32_t max_y = height - pumpkin_height;
-
-	for (uint32_t sy = 0; sy <= max_y; sy++) {
-		for (uint32_t sx = 0; sx <= max_x; sx++) {
-			bool matched = true;
-			uint32_t found_x = 0;
-			uint32_t found_y = 0;
-
-			for (size_t i = 0; i < pumpkin_pixel_count; i++) {
-				const sample_pixel_t *sample = &pumpkin_pixels[i];
-				size_t idx =
-					(((size_t)sy + (size_t)sample->dy) * (size_t)width +
-					 ((size_t)sx + (size_t)sample->dx)) *
-					(size_t)channels;
-
-				const uint8_t *candidate = &search_pixels[idx];
-
-				if (candidate[0] != sample->rgba[0] ||
-					candidate[1] != sample->rgba[1] ||
-					candidate[2] != sample->rgba[2] ||
-					candidate[3] != sample->rgba[3]) {
-					matched = false;
-					break;
-				}
-
-				if (i == 0) {
-					found_x = (uint32_t)sx + (uint32_t)sample->dx;
-					found_y = (uint32_t)sy + (uint32_t)sample->dy;
-				}
-			}
-
-			if (matched) {
-				napi_value result;
-				NAPI_CALL(env, napi_create_object(env, &result));
-
-				napi_value x_value;
-				napi_value y_value;
-				NAPI_CALL(env, napi_create_uint32(env, found_x, &x_value));
-				NAPI_CALL(env, napi_create_uint32(env, found_y, &y_value));
-
-				NAPI_CALL(env, napi_set_named_property(env, result, "x", x_value));
-				NAPI_CALL(env, napi_set_named_property(env, result, "y", y_value));
-
-				return result;
-			}
-		}
-	}
-
-	napi_value null_value;
-	NAPI_CALL(env, napi_get_null(env, &null_value));
-	return null_value;
+static napi_value js_destroy_pumpkin(napi_env env, napi_callback_info info) {
+  pumpkin_destroy(&g_pumpkin);
+  return NULL;
 }
 
-static napi_value clear_pumpkin(napi_env env, napi_callback_info info) {
-	(void)info;
-	clear_pumpkin_pixels();
-	return NULL;
-}
-
-static void addon_cleanup(void *arg) {
-	(void)arg;
-	clear_pumpkin_pixels();
+static void addon_destroy(void *arg) {
+  (void)arg;
+  pumpkin_destroy(&g_pumpkin);
 }
 
 static napi_value init(napi_env env, napi_value exports) {
-	napi_value set_fn;
-	NAPI_CALL(env, napi_create_function(env, "setPumpkinData", NAPI_AUTO_LENGTH, set_pumpkin_data, NULL, &set_fn));
-	NAPI_CALL(env, napi_set_named_property(env, exports, "setPumpkinData", set_fn));
+  napi_value set_fn;
+  NAPI_CALL(env, napi_create_function(env, "setPumpkinData", NAPI_AUTO_LENGTH,
+                                      js_set_pumpkin, NULL, &set_fn));
+  NAPI_CALL(env,
+            napi_set_named_property(env, exports, "setPumpkinData", set_fn));
 
-	napi_value find_fn;
-	NAPI_CALL(env, napi_create_function(env, "findPumpkin", NAPI_AUTO_LENGTH, find_pumpkin, NULL, &find_fn));
-	NAPI_CALL(env, napi_set_named_property(env, exports, "findPumpkin", find_fn));
+  napi_value find_fn;
+  NAPI_CALL(env, napi_create_function(env, "findPumpkin", NAPI_AUTO_LENGTH,
+                                      js_find_pumpkin, NULL, &find_fn));
+  NAPI_CALL(env, napi_set_named_property(env, exports, "findPumpkin", find_fn));
 
-	napi_value clear_fn;
-	NAPI_CALL(env, napi_create_function(env, "clearPumpkinData", NAPI_AUTO_LENGTH, clear_pumpkin, NULL, &clear_fn));
-	NAPI_CALL(env, napi_set_named_property(env, exports, "clearPumpkinData", clear_fn));
+  napi_value destroy_fn;
+  NAPI_CALL(env,
+            napi_create_function(env, "destoryPumpkinData", NAPI_AUTO_LENGTH,
+                                 js_destroy_pumpkin, NULL, &destroy_fn));
+  NAPI_CALL(env, napi_set_named_property(env, exports, "destoryPumpkinData",
+                                         destroy_fn));
 
-	NAPI_CALL(env, napi_add_env_cleanup_hook(env, addon_cleanup, NULL));
-
-	return exports;
+  NAPI_CALL(env, napi_add_env_cleanup_hook(env, addon_destroy, NULL));
+  return exports;
 }
 
 NAPI_MODULE(NODE_GYP_MODULE_NAME, init)
