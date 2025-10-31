@@ -125,7 +125,7 @@ async function handleMatch(match: TileMatch, checkExisting = false) {
 			tileY: match.tileY,
 			offsetX: match.offsetX,
 			offsetY: match.offsetY,
-			foundAt: new Date().toISOString(),
+			foundAt: checkExisting ? pumpkins[number].foundAt : new Date().toISOString(),
 		};
 	} else {
 		Object.entries(pumpkins).forEach(([key, value]) => {
