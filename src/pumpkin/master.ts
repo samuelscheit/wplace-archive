@@ -5,11 +5,9 @@ import type { WorkerConfig } from "./worker.ts";
 import { MAX_OFFSET } from "./freebind.ts";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { tlPxToGps } from "./mercator.ts";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 
-import sharp, { type OutputInfo } from "sharp";
-import { PumpkinEntry } from "../ui/types.ts";
+import type { PumpkinEntry } from "../ui/types.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
