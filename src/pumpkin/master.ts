@@ -106,14 +106,16 @@ async function spawnWorker(startY: number, endY: number, ipStartOffset: bigint, 
 
 const matches: TileMatch[] = [];
 
-async function handleMatch(match: TileMatch) {
+async function handleMatch(match: TileMatch, checkExisting = false) {
 	matches.push(match);
 
 	const { lat, lng, number } = await getPumpkinEventNumber(match.tileX, match.tileY, match.offsetX, match.offsetY);
 
-	console.log(
-		`\n🎃 Pumpkin ${number} at lat: ${lat}, lng: ${lng} (tile: ${match.tileX}, ${match.tileY}, offset: ${match.offsetX}, ${match.offsetY})\nhttps://wplace.live/?lat=${lat}&lng=${lng}&zoom=14\n`,
-	);
+	if (!checkExisting) {
+		console.log(
+			`\n🎃 Pumpkin ${number} at lat: ${lat}, lng: ${lng} (tile: ${match.tileX}, ${match.tileY}, offset: ${match.offsetX}, ${match.offsetY})\nhttps://wplace.live/?lat=${lat}&lng=${lng}&zoom=14\n`,
+		);
+	}
 
 	if (number !== undefined) {
 		pumpkins[number] = {
@@ -137,6 +139,10 @@ async function handleMatch(match: TileMatch) {
 			) {
 				// pumpkin doesn't have a event number anymore => find old pumpkin at same location and delete it
 				delete pumpkins[key];
+
+				console.log(
+					`❌ Pumpkin deleted lat: ${entry.lat}, lng: ${entry.lng} (tile: ${entry.tileX}, ${entry.tileY}, offset: ${entry.offsetX}, ${entry.offsetY}) has been removed.`,
+				);
 			}
 		});
 	}
@@ -161,7 +167,7 @@ async function main() {
 	setInterval(() => {
 		// check every minute if pumpkins have been removed
 		Object.entries(pumpkins).forEach(([key, value]) => {
-			handleMatch(value as PumpkinEntry);
+			handleMatch(value as PumpkinEntry, true);
 		});
 	}, 60000);
 
