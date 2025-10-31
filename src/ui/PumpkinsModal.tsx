@@ -22,7 +22,7 @@ type PumpkinRaw = {
 	[key: string]: unknown;
 };
 
-type PumpkinEntry = {
+export type PumpkinEntry = {
 	key: string;
 	lat: number;
 	lng: number;
