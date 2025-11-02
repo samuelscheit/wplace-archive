@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { fetch } from "undici";
 import { getDispatcher } from "./freebind.ts";
 import { hasPumpkin } from "./compare.ts";
+import { tlPxToGps } from "./mercator.ts";
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
@@ -13,6 +14,29 @@ export type TileMatch = {
 	offsetX: number;
 	offsetY: number;
 };
+
+export async function getPumpkinEventNumber(tileX: number, tileY: number, offsetX: number, offsetY: number) {
+	const { lat, lng } = tlPxToGps(tileX, tileY, offsetX, offsetY);
+
+	const response = await fetch(`https://backend.wplace.live/s0/pixel/${tileX}/${tileY}?x=${offsetX}&y=${offsetY}`, {
+		dispatcher: getDispatcher(),
+	});
+	const json: any = await response.json();
+
+	console.log(
+		`\n🎃 Pumpkin ${json?.paintedBy.eventClaimNumber} at lat: ${lat}, lng: ${lng} (tile: ${tileX}, ${tileY}, offset: ${offsetX}, ${offsetY})\nhttps://wplace.live/?lat=${lat}&lng=${lng}&zoom=14\n`,
+	);
+
+	return {
+		lat,
+		lng,
+		tileX,
+		tileY,
+		offsetX,
+		offsetY,
+		number: json?.paintedBy?.eventClaimNumber as number | undefined,
+	};
+}
 
 export async function fetchTile(x: number, y: number, tries = 0) {
 	try {
@@ -32,9 +56,7 @@ export async function fetchTile(x: number, y: number, tries = 0) {
 
 			const retryAfterMs = parseInt(retryAfter, 10) * 1000;
 
-			console.warn(
-				`Rate limit exceeded, retrying after ${retryAfterMs} ms for tile ${x}, ${y}`
-			);
+			console.warn(`Rate limit exceeded, retrying after ${retryAfterMs} ms for tile ${x}, ${y}`);
 
 			await sleep(retryAfterMs);
 
@@ -67,10 +89,7 @@ export async function processTile(x: number, y: number): Promise<TileMatch | und
 			return;
 		}
 
-		const result = await sharp(buffer)
-			.ensureAlpha()
-			.raw()
-			.toBuffer({ resolveWithObject: true });
+		const result = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 
 		const match = await hasPumpkin(result);
 

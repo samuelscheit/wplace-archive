@@ -36,7 +36,9 @@ async function runWorker(config: WorkerConfig) {
 							data: match,
 						});
 					} else {
-						process.stdout.write(`\rProcessed tile ${x}, ${y} - no match`);
+						parentPort?.postMessage({
+							type: "no_match",
+						});
 					}
 				} catch (error) {
 					parentPort?.postMessage({

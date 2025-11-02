@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PumpkinEntry } from "./types";
 
 const PUMPKIN_ENDPOINT = "/tiles/pumpkin.json";
 const POLL_INTERVAL_MS = 5_000;
@@ -20,19 +21,6 @@ type PumpkinRaw = {
 	createdAt?: unknown;
 	timestamp?: unknown;
 	[key: string]: unknown;
-};
-
-type PumpkinEntry = {
-	key: string;
-	lat: number;
-	lng: number;
-	tileX: number;
-	tileY: number;
-	offsetX: number;
-	offsetY: number;
-	event?: boolean;
-	foundDate: Date;
-	foundRaw?: string;
 };
 
 type PumpkinResponse = Record<string, PumpkinRaw>;
