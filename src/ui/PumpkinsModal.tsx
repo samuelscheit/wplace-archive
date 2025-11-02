@@ -59,19 +59,6 @@ function getVisitedPumpkins(): Map<string, Date> {
 	return map;
 }
 
-function saveVisitedPumpkins(visited: Map<string, Date>): void {
-	if (typeof window === "undefined") return;
-	try {
-		let save = {} as Record<string, string>;
-		visited.forEach((date, key) => {
-			save[key] = date.toISOString();
-		});
-		window.localStorage.setItem(VISITED_PUMPKINS_KEY, JSON.stringify(save));
-	} catch (error) {
-		console.error("Failed to save visited pumpkins:", error);
-	}
-}
-
 export function PumpkinsModal({ onClose }: { onClose: () => void }) {
 	const [pumpkins, setPumpkins] = useState<PumpkinEntry[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -132,6 +119,20 @@ export function PumpkinsModal({ onClose }: { onClose: () => void }) {
 		},
 		[scheduleHighlightRemoval],
 	);
+
+	const saveVisitedPumpkins = useCallback((map: Map<string, Date>) => {
+		setForceUpdate((v) => v + 1);
+		if (typeof window === "undefined") return;
+		try {
+			let save = {} as Record<string, string>;
+			visitedPumpkins.forEach((date, key) => {
+				save[key] = date.toISOString();
+			});
+			window.localStorage.setItem(VISITED_PUMPKINS_KEY, JSON.stringify(save));
+		} catch (error) {
+			console.error("Failed to save visited pumpkins:", error);
+		}
+	}, []);
 
 	const processResponse = useCallback(
 		(raw: PumpkinResponse) => {
@@ -288,8 +289,6 @@ export function PumpkinsModal({ onClose }: { onClose: () => void }) {
 	const handlePumpkinClick = useCallback((key: string, date: Date) => {
 		visitedPumpkins.set(key, date);
 		saveVisitedPumpkins(visitedPumpkins);
-
-		setForceUpdate((v) => v + 1);
 	}, []);
 
 	const handleCheckAll = useCallback(() => {
@@ -298,13 +297,11 @@ export function PumpkinsModal({ onClose }: { onClose: () => void }) {
 			visitedPumpkins.set(entry.key, now);
 		});
 		saveVisitedPumpkins(visitedPumpkins);
-		setForceUpdate((v) => v + 1);
 	}, [pumpkins]);
 
 	const handleUncheckAll = useCallback(() => {
 		visitedPumpkins.clear();
 		saveVisitedPumpkins(visitedPumpkins);
-		setForceUpdate((v) => v + 1);
 	}, []);
 
 	const renderFound = useCallback(
@@ -398,7 +395,7 @@ export function PumpkinsModal({ onClose }: { onClose: () => void }) {
 											isNew
 												? "border-amber-400 shadow-lg shadow-amber-400/30 bg-amber-50/70"
 												: "border-neutral-200 bg-white/80"
-										} ${visitedThisHour ? "opacity-50" : ""}`}
+										} ${isVisited ? "opacity-50" : ""}`}
 									>
 										<div className="flex items-center justify-between">
 											<div className="flex items-center gap-2 font-semibold text-neutral-800">
@@ -411,7 +408,7 @@ export function PumpkinsModal({ onClose }: { onClose: () => void }) {
 														New
 													</span>
 												)}
-												{visitedThisHour && (
+												{isVisited && (
 													<span className="rounded bg-green-500/80 px-2 py-0.5 text-[0.65rem] font-semibold uppercase text-white tracking-wider flex items-center gap-1">
 														<svg
 															xmlns="http://www.w3.org/2000/svg"
@@ -457,44 +454,34 @@ export function PumpkinsModal({ onClose }: { onClose: () => void }) {
 							})}
 						</div>
 
-					<div className="flex gap-2 mt-4 pt-4 border-t border-neutral-200 justify-center">
-						<button
-							type="button"
-							onClick={handleCheckAll}
-							className="inline-flex items-center gap-2 rounded bg-neutral-900/80 px-3 py-1 text-xs font-semibold text-neutral-100 shadow hover:bg-neutral-800 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 448 512"
-								className="size-3"
-								aria-hidden="true"
+						<div className="flex gap-2 mt-4 pt-4 border-t border-neutral-200 justify-center">
+							<button
+								type="button"
+								onClick={handleCheckAll}
+								className="inline-flex items-center gap-2 rounded bg-neutral-900/80 px-3 py-1 text-xs font-semibold text-neutral-100 shadow hover:bg-neutral-800 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
 							>
-								<path
-									fill="currentColor"
-									d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"
-								/>
-							</svg>
-							Check All
-						</button>
-						<button
-							type="button"
-							onClick={handleUncheckAll}
-							className="inline-flex items-center gap-2 rounded bg-neutral-900/80 px-3 py-1 text-xs font-semibold text-neutral-100 shadow hover:bg-neutral-800 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 384 512"
-								className="size-3"
-								aria-hidden="true"
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" className="size-3" aria-hidden="true">
+									<path
+										fill="currentColor"
+										d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"
+									/>
+								</svg>
+								Check All
+							</button>
+							<button
+								type="button"
+								onClick={handleUncheckAll}
+								className="inline-flex items-center gap-2 rounded bg-neutral-900/80 px-3 py-1 text-xs font-semibold text-neutral-100 shadow hover:bg-neutral-800 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
 							>
-								<path
-									fill="currentColor"
-									d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"
-								/>
-							</svg>
-							Uncheck All
-						</button>
-					</div>
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" className="size-3" aria-hidden="true">
+									<path
+										fill="currentColor"
+										d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"
+									/>
+								</svg>
+								Uncheck All
+							</button>
+						</div>
 					</>
 				)}
 			</div>
