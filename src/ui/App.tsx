@@ -640,9 +640,6 @@ function App() {
 		setIsCryptoOpen(true);
 	}, []);
 	const closeCrypto = useCallback(() => setIsCryptoOpen(false), []);
-	const openPumpkins = useCallback(() => {
-		setIsPumpkinsOpen(true);
-	}, []);
 	const closePumpkins = useCallback(() => setIsPumpkinsOpen(false), []);
 
 	useEffect(() => {
@@ -704,25 +701,6 @@ function App() {
 						/>
 					</svg>
 					About
-				</button>
-				<button
-					type="button"
-					onClick={openPumpkins}
-					className="rounded bg-neutral-900/70 px-3 py-1 shadow-md backdrop-blur font-semibold flex flex-row items-center gap-2 cursor-pointer hover:bg-neutral-800/70 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-neutral-200"
-					aria-haspopup="dialog"
-					aria-expanded={isPumpkinsOpen}
-					aria-controls="pumpkins-modal"
-				>
-					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" className="size-3" viewBox="0 0 24 24">
-						<g fill="none" fill-rule="evenodd">
-							<path d="m12.594 23.258l-.012.002l-.071.035l-.02.004l-.014-.004l-.071-.036q-.016-.004-.024.006l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427q-.004-.016-.016-.018m.264-.113l-.014.002l-.184.093l-.01.01l-.003.011l.018.43l.005.012l.008.008l.201.092q.019.005.029-.008l.004-.014l-.034-.614q-.005-.019-.02-.022m-.715.002a.02.02 0 0 0-.027.006l-.006.014l-.034.614q.001.018.017.024l.015-.002l.201-.093l.01-.008l.003-.011l.018-.43l-.003-.012l-.01-.01z" />
-							<path
-								fill="currentColor"
-								d="M13.483 4.64a4 4 0 0 0-.264.523c.532.144 1.033.38 1.493.688c.945-.616 2.038-.93 3.177-.73c1.673.295 2.865 1.591 3.527 3.17c.666 1.591.864 3.6.5 5.664s-1.237 3.884-2.407 5.15c-1.162 1.258-2.726 2.068-4.398 1.773a4 4 0 0 1-1.065-.349A4.7 4.7 0 0 1 12 21c-.726 0-1.415-.17-2.045-.47a4 4 0 0 1-1.066.348c-1.672.295-3.236-.515-4.398-1.772c-1.17-1.267-2.044-3.087-2.407-5.15c-.364-2.065-.166-4.074.5-5.664c.662-1.58 1.854-2.876 3.527-3.17c1.139-.201 2.232.113 3.177.73a5 5 0 0 1 1.848-.77c.138-.51.368-1.032.632-1.471c.222-.372.505-.745.843-1.039C12.939 2.288 13.414 2 14 2a1 1 0 0 1 .039 2c-.245.12-.423.417-.556.64M8.5 12.598a1 1 0 0 1-1.366-.366l-1-1.732a1 1 0 0 1 1.125-1.466l2.732.732a1 1 0 0 1 .241 1.832zm8.366-.366a1 1 0 0 1-1.366.366l-1.732-1a1 1 0 0 1 .241-1.832l2.732-.732a1 1 0 0 1 1.125 1.466zm-7.317 3.68a.515.515 0 0 0 .673-.048a2.515 2.515 0 0 1 3.556 0a.515.515 0 0 0 .673.048l.95-.712a1 1 0 0 1 1.2 1.6l-.95.712a2.515 2.515 0 0 1-3.287-.234a.515.515 0 0 0-.728 0a2.515 2.515 0 0 1-3.287.234L7.4 16.8a1 1 0 1 1 1.2-1.6z"
-							/>
-						</g>
-					</svg>
-					Pumpkins
 				</button>
 				<div className="pointer-events-none rounded bg-neutral-900/70 px-3 py-1 shadow-md backdrop-blur">
 					<span className="text-neutral-400 mr-1">Current:</span>
@@ -846,7 +824,7 @@ function App() {
 			{isBankTransferOpen && <BankTransfer closeBankTransfer={closeBankTransfer} />}
 			{isDonateOpen && <Donate openBankTransfer={openBankTransfer} closeDonate={closeDonate} openCrypto={openCrypto} />}
 			{isCryptoOpen && <Crypto closeCrypto={closeCrypto} />}
-			{isPumpkinsOpen && <PumpkinsModal onClose={closePumpkins} />}
+			{isPumpkinsOpen && <PumpkinsModal onClose={closePumpkins} openAbout={openAbout} />}
 		</>
 	);
 }

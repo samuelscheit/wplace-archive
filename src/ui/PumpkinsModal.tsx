@@ -47,7 +47,7 @@ function getVisitedPumpkins(): Map<string, Date> {
 	return map;
 }
 
-export function PumpkinsModal({ onClose }: { onClose: () => void }) {
+export function PumpkinsModal({ onClose, openAbout }: { onClose: () => void; openAbout: () => void }) {
 	const [pumpkins, setPumpkins] = useState<PumpkinEntry[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -328,16 +328,6 @@ export function PumpkinsModal({ onClose }: { onClose: () => void }) {
 						<h2 id="pumpkins-modal-title" className="text-lg font-semibold">
 							Pumpkins 🎃
 						</h2>
-						{lastUpdated && (
-							<p className="text-xs text-neutral-500">
-								Last updated{" "}
-								{lastUpdated.toLocaleTimeString(language, {
-									hour: "2-digit",
-									minute: "2-digit",
-									second: "2-digit",
-								})}
-							</p>
-						)}
 					</div>
 					<button
 						type="button"
@@ -354,124 +344,53 @@ export function PumpkinsModal({ onClose }: { onClose: () => void }) {
 					</button>
 				</div>
 
-				{loading && (
-					<div className="text-sm text-neutral-600" role="status">
-						Loading pumpkins…
+				<div className="text-sm text-neutral-600">
+					Thank you so much for all your kind messages and support! I'm glad I could help you all with finding the pumpkins.
+					<br />
+					<br />
+					A huge thank you goes to all the wonderful donors who supported the project. Thanks to you the server was able to keep
+					up with the crowds and handled over 112M+ requests, 104k+ visitors and served 11TB+ of data.
+					<br />
+					<br />
+					Special thanks go to{" "}
+					<a className="notranslate text-blue-900" href="https://zapto.zip/">
+						zapto
+					</a>{" "}
+					for the discord integration,
+					<br />
+					to{" "}
+					<a className="notranslate text-blue-900" href="https://github.com/ntanthedev">
+						Đào Nhật Tân
+					</a>{" "}
+					who added the display for already visited pumpkins,
+					<br />
+					and to{" "}
+					<a className="notranslate text-blue-900" href="https://xnacly.me/">
+						xnacly
+					</a>{" "}
+					for improving the performance of the pumpking search by more than 2x to 1100 tiles per second.
+					<br />
+					<br />
+					If you like the project and want to support it further, you can help fund the server costs by donating, sponsoring storage space, or contributing on GitHub.
+					<div className="flex justify-center items-center mt-2">
+					<button
+						type="button"
+						onClick={()=>{
+							onClose()
+							openAbout()
+						}}
+						className="inline-flex items-center gap-2 rounded bg-blue-500/70 px-4 py-2 text-sm font-semibold text-neutral-100 shadow-md backdrop-blur hover:bg-blue-600/70 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" className="size-4" aria-hidden="true">
+							<path
+								fill="white"
+								d="M241 87.1l15 20.7 15-20.7C296 52.5 336.2 32 378.9 32 452.4 32 512 91.6 512 165.1l0 2.6c0 112.2-139.9 242.5-212.9 298.2-12.4 9.4-27.6 14.1-43.1 14.1s-30.8-4.6-43.1-14.1C139.9 410.2 0 279.9 0 167.7l0-2.6C0 91.6 59.6 32 133.1 32 175.8 32 216 52.5 241 87.1z"
+							/>
+						</svg>
+						About Wplace Archive
+					</button>
 					</div>
-				)}
-
-				{!loading && error && (
-					<div className="text-sm text-red-600 bg-red-100/60 border border-red-200 rounded px-3 py-2">
-						Failed to load pumpkins: {error}
-					</div>
-				)}
-
-				{!loading && !error && pumpkins.length === 0 && <div className="text-sm text-neutral-600">No pumpkins were found.</div>}
-
-				{pumpkins.length > 0 && (
-					<>
-						<div className="pr-2" style={{}}>
-							{pumpkins.map((entry) => {
-								const isNew = highlightedKeys.has(entry.key);
-								const isVisited = visitedPumpkins.get(entry.key);
-								const visitedThisHour = isVisited && isVisited.getTime() >= thisHour.getTime();
-
-								return (
-									<div
-										key={entry.key}
-										className={`rounded border px-3 py-1 text-sm transition-all ${
-											isNew
-												? "border-amber-400 shadow-lg shadow-amber-400/30 bg-amber-50/70"
-												: "border-neutral-200 bg-white/80"
-										} ${isVisited ? "opacity-50" : ""}`}
-									>
-										<div className="flex items-center justify-between">
-											<div className="flex items-center gap-2 font-semibold text-neutral-800">
-												{entry.key}
-												<div className="text-neutral-500 text-xs font-normal">
-													{entry.foundDate && <div>Found at {renderFound(entry)}</div>}
-												</div>
-												{isNew && (
-													<span className="rounded bg-amber-400/80 px-2 py-0.5 text-[0.65rem] font-semibold uppercase text-amber-950 tracking-wider">
-														New
-													</span>
-												)}
-												{isVisited && (
-													<span className="rounded bg-green-500/80 px-2 py-0.5 text-[0.65rem] font-semibold uppercase text-white tracking-wider flex items-center gap-1">
-														<svg
-															xmlns="http://www.w3.org/2000/svg"
-															viewBox="0 0 448 512"
-															className="size-2.5"
-															aria-hidden="true"
-														>
-															<path
-																fill="currentColor"
-																d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"
-															/>
-														</svg>
-														Visited
-													</span>
-												)}
-											</div>
-											<a
-												href={getLive(entry)}
-												type="button"
-												target="_blank"
-												rel="noopener noreferrer"
-												onClick={() => {
-													handlePumpkinClick(entry.key, entry.foundDate);
-												}}
-												className="mt-1 inline-flex items-center gap-2 rounded bg-neutral-900/80 px-3 py-1 text-xs font-semibold text-neutral-100 shadow hover:bg-neutral-800 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
-											>
-												Open live
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													viewBox="0 0 448 512"
-													className="size-3"
-													aria-hidden="true"
-												>
-													<path
-														fill="currentColor"
-														d="M432 320H416c-8.84 0-16 7.16-16 16v112H48V80h112c8.84 0 16-7.16 16-16V48c0-8.84-7.16-16-16-16H32C14.33 32 0 46.33 0 64v384c0 17.67 14.33 32 32 32h384c17.67 0 32-14.33 32-32V336c0-8.84-7.16-16-16-16zM424 0H296c-13.25 0-24 10.75-24 24v128c0 21.36 25.85 32.09 40.97 16.97l35.72-35.72L201 301.7c-6.24 6.24-6.24 16.38 0 22.62l22.63 22.62c6.25 6.24 16.38 6.24 22.63 0l147.68-147.45 35.72 35.72C335.91 249.15 346.64 224 325.28 224H456c13.25 0 24-10.75 24-24V24c0-13.25-10.75-24-24-24z"
-													/>
-												</svg>
-											</a>
-										</div>
-									</div>
-								);
-							})}
-						</div>
-
-						<div className="flex gap-2 mt-4 pt-4 border-t border-neutral-200 justify-center">
-							<button
-								type="button"
-								onClick={handleCheckAll}
-								className="inline-flex items-center gap-2 rounded bg-neutral-900/80 px-3 py-1 text-xs font-semibold text-neutral-100 shadow hover:bg-neutral-800 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
-							>
-								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" className="size-3" aria-hidden="true">
-									<path
-										fill="currentColor"
-										d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"
-									/>
-								</svg>
-								Check All
-							</button>
-							<button
-								type="button"
-								onClick={handleUncheckAll}
-								className="inline-flex items-center gap-2 rounded bg-neutral-900/80 px-3 py-1 text-xs font-semibold text-neutral-100 shadow hover:bg-neutral-800 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
-							>
-								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" className="size-3" aria-hidden="true">
-									<path
-										fill="currentColor"
-										d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"
-									/>
-								</svg>
-								Uncheck All
-							</button>
-						</div>
-					</>
-				)}
+				</div>
 			</div>
 		</div>
 	);
