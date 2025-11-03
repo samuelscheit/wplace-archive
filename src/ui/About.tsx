@@ -77,7 +77,7 @@ export function About({
 						Also <span className="bold">huge thanks</span> to the <span className="bold">supporters</span> (
 						<span className="bg-gray-500/10 ">
 							Nicolas R., Anton B., Paweł A., Liliana B., Soli, Kilen N., Alidoof, Dhu S., Alex N., Noam B.,
-							WatermelonEnjoyer, Marjon S., Christian K., Jared G., TheQueenOfNowhere, Skycloud, Brian R., Lu z., Yehkai C.,
+							WatermelonEnjoyer, Marjon S., Christian K., TheQueenOfNowhere, Skycloud, Brian R., Lu z., Yehkai C.,
 							Technocratic, ahaxd, Harper N.,
 						</span>
 						) who make preserving wplace possible and thank you to{" "}
