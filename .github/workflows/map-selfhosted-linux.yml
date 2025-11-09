@@ -24,14 +24,14 @@ jobs:
             - run: python3 scripts/vips.py
             - run: tar -czf tiles.tar.gz  --no-xattrs -C public/tiles .
             - run: mv public/tiles /var/lib/docker/volumes/cc0ccwsg4csggwwwg48ookc0_tiles/_data/${{ github.event.inputs.release_id }}
-            - name: Split archive into <2GB parts
-              run: |
-                  echo "Original archive size:" && ls -lh tiles.tar.gz
-                  # Split into 1.9GB chunks (GitHub release asset limit is 2GB)
-                  split -b 1900m -d -a 3 tiles.tar.gz tiles.tar.gz.part.
-                  rm tiles.tar.gz
-                  echo "Generated parts:" && ls -lh tiles.tar.gz.part.*
-            - name: Upload release assets
-              run: echo "" | gh release create ${{ github.event.inputs.release_id }} --repo samuelscheit/wplace-archive -t ${{ github.event.inputs.release_id }} tiles.tar.gz.part.* --notes-file -
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#            - name: Split archive into <2GB parts
+#              run: |
+#                  echo "Original archive size:" && ls -lh tiles.tar.gz
+#                  # Split into 1.9GB chunks (GitHub release asset limit is 2GB)
+#                  split -b 1900m -d -a 3 tiles.tar.gz tiles.tar.gz.part.
+#                  rm tiles.tar.gz
+#                  echo "Generated parts:" && ls -lh tiles.tar.gz.part.*
+#            - name: Upload release assets
+#              run: echo "" | gh release create ${{ github.event.inputs.release_id }} --repo samuelscheit/wplace-archive -t ${{ github.event.inputs.release_id }} tiles.tar.gz.part.* --notes-file -
+#              env:
+#                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
