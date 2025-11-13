@@ -32,11 +32,12 @@ if (args.length < 1) {
 }
 
 const directoryPath = resolve(args[0]);
+const prefix = args[1] || "";
 
 console.log(`Reading files from directory: ${directoryPath}`);
 
 for await (const filePath of readDirRecursive(directoryPath)) {
-	const key = "/" + relative(directoryPath, filePath);
+	const key = prefix + "/" + relative(directoryPath, filePath);
 	console.log(`Found file: ${key}`);
 
 	// uploadToS3({
