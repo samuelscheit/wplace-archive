@@ -16,6 +16,8 @@ export async function deleteTilesPrefix(prefix?: string, concurrency = 1) {
 
 	let finished = false;
 
+	const deleted = new Set<string>();
+
 	while (!finished) {
 		queue.add(async () => {
 			s.fetchingList = true;
@@ -23,7 +25,7 @@ export async function deleteTilesPrefix(prefix?: string, concurrency = 1) {
 				new ListObjectsV2Command({
 					Bucket: process.env.S3_BUCKET_NAME,
 					Prefix: prefix,
-					MaxKeys: 1000,
+					MaxKeys: 100,
 					ContinuationToken: continuationToken,
 				}),
 			);
@@ -32,8 +34,9 @@ export async function deleteTilesPrefix(prefix?: string, concurrency = 1) {
 
 			s.found = (s.found || 0) + (listResponse.KeyCount || 0);
 
-			const objects = listResponse.Contents || [];
-			if (objects.length === 0) {
+			const objects = (listResponse.Contents || []).filter((x) => !deleted.has(x.Key!));
+			if (!listResponse.Contents || listResponse.Contents.length === 0) {
+				console.log("No more objects to delete", listResponse.Contents?.length);
 				finished = true;
 				return;
 			}
@@ -48,6 +51,10 @@ export async function deleteTilesPrefix(prefix?: string, concurrency = 1) {
 					},
 				}),
 			);
+
+			objects.forEach((obj) => {
+				deleted.add(obj.Key!);
+			});
 
 			s.fetchingDelete = false;
 			s.deleted = (s.deleted || 0) + objects.length;
