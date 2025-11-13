@@ -120,6 +120,7 @@ const Counter = observer(() => {
 						{deleting.map((item) => {
 							const diff = Date.now() - item.start;
 							const elapsed = IntlTimeDiff.format(-Math.round(diff / 1000), "seconds");
+							const tps = item.deleted && diff > 0 ? (item.deleted / diff) * 1000 : 0;
 
 							return (
 								<Box key={item.name} gap={2}>
@@ -150,6 +151,12 @@ const Counter = observer(() => {
 										<Text bold color="greenBright">
 											{elapsed}
 										</Text>
+									</Box>
+									<Box gap={1}>
+										<Text bold color="greenBright">
+											{tps.toFixed(1)}
+										</Text>
+										<Text color="green">Tiles per sec</Text>
 									</Box>
 									{item.fetchingList && <Spinner label={`fetching list...`} />}
 									{item.fetchingDelete && <Spinner label={`deleting...`} />}

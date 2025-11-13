@@ -17,6 +17,7 @@ import { render, Text } from "ink";
 import { state } from "./s3_ui.tsx";
 import "./s3_ui.tsx";
 import { observable } from "mobx";
+import { deleteTilesPrefix, uploadToS3 } from "./s3_util.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,50 +45,6 @@ const BASE_TMP_DIR = path.join(tmpdir(), "wplace", "tiles");
 const ensureDir = async (dir: string) => {
 	await fsp.mkdir(dir, { recursive: true });
 };
-
-async function deleteTilesPrefix(prefix: string) {
-	let continuationToken: string | undefined;
-
-	const s = (state.deleting[prefix] ||= observable({ name: prefix, start: Date.now() }));
-
-	while (true) {
-		s.fetchingList = true;
-		const listResponse = await awsS3.send(
-			new ListObjectsV2Command({
-				Bucket: process.env.S3_BUCKET_NAME,
-				Prefix: prefix,
-				MaxKeys: 100,
-				ContinuationToken: continuationToken,
-			}),
-		);
-		s.fetchingList = false;
-		s.pages = (s.pages || 0) + 1;
-
-		s.found = (s.found || 0) + (listResponse.KeyCount || 0);
-
-		const objects = listResponse.Contents || [];
-		if (objects.length === 0) break;
-
-		s.fetchingDelete = true;
-
-		await awsS3.send(
-			new DeleteObjectsCommand({
-				Bucket: process.env.S3_BUCKET_NAME!,
-				Delete: {
-					Objects: objects.map((obj) => ({ Key: obj.Key! })),
-				},
-			}),
-		);
-
-		s.fetchingDelete = false;
-		s.deleted = (s.deleted || 0) + objects.length;
-
-		if (!listResponse.IsTruncated) break;
-		continuationToken = listResponse.NextContinuationToken;
-	}
-
-	s.finished = true;
-}
 
 async function streamConcatenateAsset(asset: any, releaseName: string, tries = 0) {
 	try {
@@ -158,7 +115,7 @@ async function streamConcatenateAssets(assets: any[], keys = new Set<string>(), 
 
 				s.extracted++;
 
-				await uploadToS3({
+				await uploadReleaseToS3({
 					releaseName,
 					fileName,
 					content,
@@ -201,41 +158,18 @@ async function streamConcatenateAssets(assets: any[], keys = new Set<string>(), 
 	parseStream.end();
 }
 
-async function uploadToS3(opts: { releaseName: string; fileName: string; content: Buffer; tries?: number }) {
-	if (!opts.fileName || opts.fileName.endsWith("/")) return;
-	if (opts.content.length === 0 && !opts.fileName.includes(".")) return;
-
-	if (opts.tries === undefined) {
-		opts.tries = 0;
-	}
-
+async function uploadReleaseToS3(opts: { releaseName: string; fileName: string; content: Buffer; tries?: number }) {
 	const s = state.downloadReleases[opts.releaseName]!;
 
 	const key = `tiles/${opts.releaseName}/${opts.fileName}`;
 
-	try {
-		const url = await getSignedUrl(
-			awsS3,
-			new PutObjectCommand({
-				Bucket: process.env.S3_BUCKET_NAME,
-				Key: key,
-			}),
-		);
+	await uploadToS3({
+		key: key,
+		content: opts.content,
+		tries: opts.tries,
+	});
 
-		await fetch(url, {
-			method: "PUT",
-			body: opts.content as any,
-		});
-		s.uploaded++;
-	} catch (error) {
-		if (opts.tries >= 3) {
-			console.error(`Failed to upload ${key} after ${opts.tries} tries:`, error);
-			throw error;
-		}
-
-		opts.tries++;
-		return uploadToS3(opts);
-	}
+	s.uploaded++;
 }
 
 async function downloadRelease(release: any) {
