@@ -59,13 +59,13 @@ export function About({
 					<div>
 						Behind the scenes every snapshot takes <span className="bold"> 12 hours </span> to render and needs{" "}
 						<span className="bold">~24 GB</span>. I host this on a <span className="bold">$24/month server</span> with{" "}
-						<span className="bold">500 GB disk space</span> (<span className="bold">84% used</span>). Special thanks to Hayden
+						<span className="bold">500 GB disk space</span> (<span className="bold">91% used</span>). Special thanks to Hayden
 						who helps out with additional storage space.
 					</div>
 
 					<div>
 						I'm currently paying <span className="codeblock">$24</span> a month to keep this project online with the help of{" "}
-						<span className="codeblock">22</span> donaters.
+						<span className="codeblock">30</span> donaters.
 					</div>
 
 					<div>
@@ -78,7 +78,7 @@ export function About({
 						<span className="bg-gray-500/10 ">
 							Nicolas R., Anton B., Paweł A., Liliana B., Soli, Kilen N., Alidoof, Dhu S., Alex N., Noam B.,
 							WatermelonEnjoyer, Marjon S., Christian K., TheQueenOfNowhere, Skycloud, Brian R., Lu z., Yehkai C.,
-							Technocratic, ahaxd, Harper N.,
+							Technocratic, ahaxd, Harper N., OverthereStair, Eollas, atodemiru, Raine S., Zsolt M., Joshua T., SAGQ, noizu, My_crying_soul
 						</span>
 						) who make preserving wplace possible and thank you to{" "}
 						<a
