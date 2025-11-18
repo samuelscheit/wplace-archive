@@ -40,8 +40,12 @@ const queue = new PQueue({ concurrency });
 
 console.log(`Reading files from directory: ${directoryPath}`);
 
+let i = 0;
+
 for await (const filePath of readDirRecursive(directoryPath)) {
 	const key = prefix + "/" + relative(directoryPath, filePath);
+
+	process.stdout.write(`\r${i++} - Uploading: ${key}               `);
 
 	queue.add(async() => {
 		await uploadToS3({
