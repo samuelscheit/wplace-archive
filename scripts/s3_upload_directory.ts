@@ -2,6 +2,7 @@ import * as fs from "fs/promises";
 import { join, relative, resolve } from "path";
 import jsonfile from "jsonfile";
 import { uploadToS3 } from "./s3_util";
+import PQueue from "p-queue";
 
 const uploadedFilesPath = join(__dirname, "uploaded_files.json");
 
@@ -33,17 +34,22 @@ if (args.length < 1) {
 
 const directoryPath = resolve(args[0]);
 const prefix = args[1] || "";
+const concurrency = 1000;
+
+const queue = new PQueue({ concurrency });
 
 console.log(`Reading files from directory: ${directoryPath}`);
 
 for await (const filePath of readDirRecursive(directoryPath)) {
 	const key = prefix + "/" + relative(directoryPath, filePath);
-	console.log(`Found file: ${key}`);
 
-	// uploadToS3({
-	// 	content: await fs.readFile(filePath),
-	// 	key: key,
-	// });
-	// uploadedFiles.add(filePath);
-	// Here you would add your S3 upload logic
+	queue.add(async() => {
+		await uploadToS3({
+			content: await fs.readFile(filePath),
+			key: key,
+		});
+		uploadedFiles.add(filePath);
+	})
+
+	await queue.onSizeLessThan(concurrency)
 }
