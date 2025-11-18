@@ -40,7 +40,7 @@ const queue = new PQueue({ concurrency });
 
 console.log(`Reading files from directory: ${directoryPath}`);
 
-let i = 0;
+let i = uploadedFiles.size
 
 for await (const filePath of readDirRecursive(directoryPath)) {
 	const key = prefix + "/" + relative(directoryPath, filePath);
