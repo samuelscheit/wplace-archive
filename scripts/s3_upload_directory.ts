@@ -1,5 +1,5 @@
 import * as fs from "fs/promises";
-import { existsSync, readFileSync, writeFileSync, createReadStream, createWriteStream } from "fs";
+import { existsSync, writeFileSync, createReadStream, createWriteStream } from "fs";
 import { dirname, join, relative, resolve } from "path";
 import { uploadToS3 } from "./s3_util.ts";
 import PQueue from "p-queue";
@@ -54,23 +54,36 @@ async function streamJsonStringArray(
 	}
 }
 
-async function migrateUploadedFiles(): Promise<Set<string>> {
-	const normalize = (content: string) =>
-		content
-			.split("\n")
-			.map((line) => line.trim())
-			.filter(Boolean);
+async function countLines(filePath: string): Promise<number> {
+	let count = 0;
+	let hasDanglingChars = false;
 
+	for await (const chunk of createReadStream(filePath, { encoding: "utf-8" })) {
+		const text = typeof chunk === "string" ? chunk : chunk.toString("utf-8");
+		for (let i = 0; i < text.length; i++) {
+			if (text[i] === "\n") {
+				count++;
+				hasDanglingChars = false;
+			} else {
+				hasDanglingChars = true;
+			}
+		}
+	}
+
+	return count + (hasDanglingChars ? 1 : 0);
+}
+
+async function migrateUploadedFiles(): Promise<number> {
 	if (existsSync(uploadedFilesPath)) {
-		return new Set(normalize(readFileSync(uploadedFilesPath, "utf-8")));
+		return countLines(uploadedFilesPath);
 	}
 
 	if (!existsSync(legacyUploadedFilesPath)) {
 		writeFileSync(uploadedFilesPath, "", "utf-8");
-		return new Set();
+		return 0;
 	}
 
-	const uploadedSet = new Set<string>();
+	let count = 0;
 	const writer = createWriteStream(uploadedFilesPath, { encoding: "utf-8" });
 	const writeLine = async (line: string) => {
 		if (!writer.write(line)) {
@@ -79,10 +92,8 @@ async function migrateUploadedFiles(): Promise<Set<string>> {
 	};
 
 	await streamJsonStringArray(legacyUploadedFilesPath, async (value) => {
-		if (!uploadedSet.has(value)) {
-			uploadedSet.add(value);
-			await writeLine(`${value}\n`);
-		}
+		count++;
+		await writeLine(`${value}\n`);
 	});
 
 	await new Promise<void>((resolve, reject) => {
@@ -90,19 +101,19 @@ async function migrateUploadedFiles(): Promise<Set<string>> {
 		writer.end(resolve);
 	});
 
-	return uploadedSet;
+	return count;
 }
 
 async function main() {
-	const uploadedFiles = await migrateUploadedFiles();
-	const addedUploadedFIles: string[] = [];
+	let uploadedFilesCount = await migrateUploadedFiles();
+	const addedUploadedFiles: string[] = [];
 
 	setInterval(() => {
-		if (!addedUploadedFIles.length) {
+		if (!addedUploadedFiles.length) {
 			return;
 		}
-		const pending = addedUploadedFIles.splice(0, addedUploadedFIles.length);
-		void fs.appendFile(uploadedFilesPath, pending.join("\n") + "\n", "utf-8").catch(() => {});
+		const pending = addedUploadedFiles.splice(0, addedUploadedFiles.length);
+		fs.appendFile(uploadedFilesPath, pending.join("\n") + "\n", "utf-8").catch(() => {});
 	}, 1000 * 10);
 
 	async function* readDirRecursive(dir: string): AsyncGenerator<string> {
@@ -133,9 +144,13 @@ async function main() {
 
 	console.log(`Reading files from directory: ${directoryPath}`);
 
-	let i = uploadedFiles.size;
+	let i = 0
 
 	for await (const filePath of readDirRecursive(directoryPath)) {
+		if (i++ < uploadedFilesCount) {
+			continue;
+		}
+
 		const key = prefix + "/" + relative(directoryPath, filePath);
 
 		process.stdout.write(`\r${i++} - Uploading: ${key}               `);
@@ -143,13 +158,9 @@ async function main() {
 		queue.add(async () => {
 			await uploadToS3({
 				content: await fs.readFile(filePath),
-				key: key,
+				key,
 			});
-			const sizeBefore = uploadedFiles.size;
-			uploadedFiles.add(filePath);
-			if (uploadedFiles.size !== sizeBefore) {
-				addedUploadedFIles.push(filePath);
-			}
+			addedUploadedFiles.push(filePath);
 		});
 
 		await queue.onSizeLessThan(concurrency);
