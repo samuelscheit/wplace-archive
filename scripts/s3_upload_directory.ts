@@ -1,7 +1,6 @@
 import * as fs from "fs/promises";
-import { existsSync, readFileSync, writeFileSync, createReadStream } from "fs";
+import { existsSync, readFileSync, writeFileSync, createReadStream, createWriteStream } from "fs";
 import { dirname, join, relative, resolve } from "path";
-import jsonfile from "jsonfile";
 import { uploadToS3 } from "./s3_util.ts";
 import PQueue from "p-queue";
 import { fileURLToPath } from "url";
@@ -12,8 +11,10 @@ const __dirname = dirname(__filename);
 const uploadedFilesPath = join(__dirname, "uploaded_files.txt");
 const legacyUploadedFilesPath = join(__dirname, "uploaded_files.json");
 
-async function streamJsonStringArray(filePath: string): Promise<string[]> {
-	const entries: string[] = [];
+async function streamJsonStringArray(
+	filePath: string,
+	onValue: (value: string) => void | Promise<void>
+): Promise<void> {
 	const stream = createReadStream(filePath, { encoding: "utf-8" });
 	let inString = false;
 	let escapeNext = false;
@@ -40,7 +41,7 @@ async function streamJsonStringArray(filePath: string): Promise<string[]> {
 				continue;
 			}
 			if (char === '"') {
-				entries.push(JSON.parse(`"${current}"`));
+				await onValue(JSON.parse(`"${current}"`));
 				inString = false;
 				continue;
 			}
@@ -51,8 +52,6 @@ async function streamJsonStringArray(filePath: string): Promise<string[]> {
 	if (inString || escapeNext) {
 		throw new Error(`Unexpected EOF while parsing ${filePath}`);
 	}
-
-	return entries;
 }
 
 async function migrateUploadedFiles(): Promise<Set<string>> {
@@ -71,9 +70,27 @@ async function migrateUploadedFiles(): Promise<Set<string>> {
 		return new Set();
 	}
 
-	const entries = await streamJsonStringArray(legacyUploadedFilesPath);
-	writeFileSync(uploadedFilesPath, entries.length ? entries.join("\n") + "\n" : "", "utf-8");
-	return new Set(entries);
+	const uploadedSet = new Set<string>();
+	const writer = createWriteStream(uploadedFilesPath, { encoding: "utf-8" });
+	const writeLine = async (line: string) => {
+		if (!writer.write(line)) {
+			await new Promise<void>((resolve) => writer.once("drain", resolve));
+		}
+	};
+
+	await streamJsonStringArray(legacyUploadedFilesPath, async (value) => {
+		if (!uploadedSet.has(value)) {
+			uploadedSet.add(value);
+			await writeLine(`${value}\n`);
+		}
+	});
+
+	await new Promise<void>((resolve, reject) => {
+		writer.once("error", reject);
+		writer.end(resolve);
+	});
+
+	return uploadedSet;
 }
 
 async function main() {
