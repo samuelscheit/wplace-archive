@@ -269,7 +269,8 @@ function App() {
 								`tiles-${timeSlug(time)}`,
 								{
 									type: "raster",
-									tiles: [`https://wplace.samuelscheit.com/tiles/world-${timeSlug(time)}/{z}/{x}/{y}.png`],
+									// https://wplace_cdn.samuelscheit.com/wplace-samuelscheit/tiles/world-2025-10-18T07-23-59.887Z/9/209/82.png
+									tiles: [`https://wplace_cdn.samuelscheit.com/wplace-samuelscheit/tiles/world-${timeSlug(time)}/{z}/{x}/{y}.png`],
 									// tileSize: TILE_SIZE,
 									scheme: "xyz",
 									maxzoom: 11,
@@ -509,7 +510,8 @@ function App() {
 				p.timeUnix,
 			);
 		}
-		if (p.index !== pendingIndex) setSelectedIndex(pendingIndex);
+		console.log("render", p, selectedIndex)
+		if (pendingIndex !== selectedIndex) setSelectedIndex(pendingIndex);
 	}
 
 	useLayoutEffect(() => {
