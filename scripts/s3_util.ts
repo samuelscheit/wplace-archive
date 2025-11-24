@@ -1,5 +1,5 @@
 import { observable } from "mobx";
-import { state } from "./s3_ui.tsx";
+import { state } from "./s3_ui_state.ts";
 import { DeleteObjectsCommand, ListObjectsV2Command, PutObjectCommand } from "@aws-sdk/client-s3";
 import { awsS3 } from "./s3_client.ts";
 import PQueue from "p-queue";

@@ -1,64 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Box, render, Text } from "ink";
-import { observable, observe } from "mobx";
 import { observer } from "mobx-react";
-import { configure } from "mobx";
 import { Spinner } from "@inkjs/ui";
-
-export const state = observable(
-	{
-		deleting: {} as Record<
-			string,
-			{
-				name: string;
-				start: number;
-				found?: number;
-				deleted?: number;
-				fetchingList?: boolean;
-				fetchingDelete?: boolean;
-				finished?: boolean;
-				pages?: number;
-			}
-		>,
-		listReleases: undefined as
-			| undefined
-			| {
-					releases?: number;
-					page?: number;
-					finished?: boolean;
-					toDelete?: number;
-					toSync?: number;
-			  },
-		downloadReleases: {} as Record<
-			string,
-			{
-				name: string;
-				start: number;
-				assets: number;
-				currentFile?: string;
-				skippingCurrentFile?: boolean;
-				fetchingList?: boolean;
-				fetchingDownload?: boolean;
-				finished?: boolean;
-				queueRunning?: number;
-				queueSize?: number;
-				queueTar?: number;
-				downloaded: number;
-				downloadBytes?: number;
-				totalBytes?: number;
-				pages: number;
-				extracted: number;
-				uploaded: number;
-			}
-		>,
-	},
-	{},
-	{
-		deep: true,
-	},
-);
-
-configure({ enforceActions: "never" });
+import { state } from "./s3_ui_state";
 
 const IntlTimeDiff = new Intl.RelativeTimeFormat("en", { numeric: "auto", style: "short" });
 
