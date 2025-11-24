@@ -106,14 +106,18 @@ async function migrateUploadedFiles(): Promise<number> {
 
 async function main() {
 	let uploadedFilesCount = await migrateUploadedFiles();
+
+	console.log(`Resuming from ${uploadedFilesCount} uploaded files.`);
+
 	const addedUploadedFiles: string[] = [];
+	const uploadedFilesFD = await fs.open(uploadedFilesPath, 'a+');
 
 	setInterval(() => {
 		if (!addedUploadedFiles.length) {
 			return;
 		}
 		const pending = addedUploadedFiles.splice(0, addedUploadedFiles.length);
-		fs.appendFile(uploadedFilesPath, pending.join("\n") + "\n", "utf-8").catch(() => {});
+		fs.appendFile(uploadedFilesFD, pending.join("\n") + "\n", "utf-8").catch(() => {});
 	}, 1000 * 10);
 
 	async function* readDirRecursive(dir: string): AsyncGenerator<string> {
