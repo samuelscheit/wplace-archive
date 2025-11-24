@@ -1,9 +1,13 @@
 import * as fs from "fs/promises";
 import { existsSync, readFileSync, writeFileSync } from "fs";
-import { join, relative, resolve } from "path";
+import { dirname, join, relative, resolve } from "path";
 import jsonfile from "jsonfile";
 import { uploadToS3 } from "./s3_util.ts";
 import PQueue from "p-queue";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const uploadedFilesPath = join(__dirname, "uploaded_files.txt");
 const legacyUploadedFilesPath = join(__dirname, "uploaded_files.json");
