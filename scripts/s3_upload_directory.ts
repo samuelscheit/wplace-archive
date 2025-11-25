@@ -169,6 +169,10 @@ async function main() {
 
 		await queue.onSizeLessThan(concurrency);
 	}
+
+	await queue.onIdle();
+
+	process.exit()
 }
 
 main();

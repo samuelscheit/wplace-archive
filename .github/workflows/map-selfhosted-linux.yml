@@ -23,14 +23,15 @@ jobs:
             - run: node scripts/download_archive.ts ${{ github.event.inputs.release_id }}
             - run: python3 scripts/vips.py
             - run: tar -czf tiles.tar.gz  --no-xattrs -C public/tiles .
-            - run: node scripts/s3_upload_directory.ts public/tiles tiles/${{ github.event.inputs.release_id }}
+            - run: cp /root/wplace-archive/.env .env
             - name: Split archive into <2GB parts
               run: |
                   echo "Original archive size:" && ls -lh tiles.tar.gz
-                  split -b 2G -d -a 3 tiles.tar.gz tiles.tar.gz.part.
+                  split -b 1999M -d -a 3 tiles.tar.gz tiles.tar.gz.part.
                   rm tiles.tar.gz
                   echo "Generated parts:" && ls -lh tiles.tar.gz.part.*
             - name: Upload release assets
               run: echo "" | gh release create ${{ github.event.inputs.release_id }} --repo samuelscheit/wplace-archive -t ${{ github.event.inputs.release_id }} tiles.tar.gz.part.* --notes-file -
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            - run: node scripts/s3_upload_directory.ts public/tiles tiles/${{ github.event.inputs.release_id }}
