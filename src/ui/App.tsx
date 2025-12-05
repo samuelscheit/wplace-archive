@@ -20,9 +20,10 @@ const WORLD_N = 85.0511287798066; // top latitude in EPSG:3857
 
 // Times available for the time-travel tile layers. Use valid ISO strings (Map overlay folders use ':' replaced by '-').
 const timeStrings: string[] = [
+	"2025-12-01T19:40:42.807Z",
 	"2025-11-24T17:24:03.339Z",
 	"2025-11-16T22:30:04.682Z",
- 	"2025-11-09T15:37:15.485Z",
+	"2025-11-09T15:37:15.485Z",
 	"2025-10-30T16:31:21.825Z",
 	"2025-10-24T23:09:24.923Z",
 	"2025-10-18T07:23:59.887Z",
@@ -272,7 +273,9 @@ function App() {
 								{
 									type: "raster",
 									// https://wplace_cdn.samuelscheit.com/wplace-samuelscheit/tiles/world-2025-10-18T07-23-59.887Z/9/209/82.png
-									tiles: [`https://wplace_cdn.samuelscheit.com/wplace-samuelscheit/tiles/world-${timeSlug(time)}/{z}/{x}/{y}.png`],
+									tiles: [
+										`https://wplace_cdn.samuelscheit.com/wplace-samuelscheit/tiles/world-${timeSlug(time)}/{z}/{x}/{y}.png`,
+									],
 									// tileSize: TILE_SIZE,
 									scheme: "xyz",
 									maxzoom: 11,
@@ -512,7 +515,7 @@ function App() {
 				p.timeUnix,
 			);
 		}
-		console.log("render", p, selectedIndex)
+		console.log("render", p, selectedIndex);
 		if (pendingIndex !== selectedIndex) setSelectedIndex(pendingIndex);
 	}
 
