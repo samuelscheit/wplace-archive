@@ -15,28 +15,12 @@ import { Crypto } from "./Crypto";
 import { PumpkinsModal } from "./PumpkinsModal";
 // @ts-ignore
 import { useEvent } from "./use-event.js";
+import snapshots from "./snapshots.json";
 
 const WORLD_N = 85.0511287798066; // top latitude in EPSG:3857
 
 // Times available for the time-travel tile layers. Use valid ISO strings (Map overlay folders use ':' replaced by '-').
-const timeStrings: string[] = [
-	"2025-12-07T21:56:29.019Z",
-	"2025-12-01T19:40:42.807Z",
-	"2025-11-24T17:24:03.339Z",
-	"2025-11-16T22:30:04.682Z",
-	"2025-11-09T15:37:15.485Z",
-	"2025-10-30T16:31:21.825Z",
-	"2025-10-24T23:09:24.923Z",
-	"2025-10-18T07:23:59.887Z",
-	"2025-10-11T13:55:18.919Z",
-	"2025-10-04T12:28:23.768Z",
-	"2025-09-22T17:49:18.014Z",
-	"2025-09-13T14:53:56.640Z",
-	"2025-09-09T11:58:48.527Z",
-	"2025-08-25T21:47:23.259Z",
-	"2025-08-22T11:34:06.282Z",
-	"2025-08-09T20:01:14.231Z",
-];
+const timeStrings: string[] = snapshots;
 const defaultTimes = timeStrings.map((s) => new Date(s));
 
 let franceTimes = [] as Date[];

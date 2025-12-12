@@ -1,10 +1,12 @@
 name: Generate world map (self hosted linux)
 
 on:
+    schedule:
+        - cron: "0 0 * * 0"
     workflow_dispatch:
         inputs:
             release_id:
-                required: true
+                required: false
 
 permissions:
     contents: write # needed to create / update releases
@@ -13,15 +15,33 @@ permissions:
 jobs:
     build:
         runs-on: self-hosted
-        timeout-minutes: 1.440
+        timeout-minutes: 1440
 
         steps:
             - uses: actions/checkout@v4
+            - name: Determine Release ID
+              id: get_release
+              run: |
+                  if [ -n "${{ inputs.release_id }}" ]; then
+                      echo "Using provided Release ID: ${{ inputs.release_id }}"
+                      echo "RELEASE_ID=${{ inputs.release_id }}" >> $GITHUB_ENV
+                  else
+                      echo "Fetching latest Release ID from murolem/wplace-archives..."
+                      LATEST_RELEASE=$(gh release list --repo murolem/wplace-archives --limit 1 --json tagName --jq '.[0].tagName')
+                      if [ -z "$LATEST_RELEASE" ]; then
+                          echo "Error: Could not fetch latest release ID"
+                          exit 1
+                      fi
+                      echo "Latest Release ID: $LATEST_RELEASE"
+                      echo "RELEASE_ID=$LATEST_RELEASE" >> $GITHUB_ENV
+                  fi
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
             - uses: actions/setup-node@v4
               with:
                   node-version: 24
             - run: npm install
-            - run: node scripts/download_archive.ts ${{ github.event.inputs.release_id }}
+            - run: node scripts/download_archive.ts ${{ env.RELEASE_ID }}
             - run: python3 scripts/vips.py
             - run: tar -czf tiles.tar.gz  --no-xattrs -C public/tiles .
             - run: cp /root/wplace-archive/.env .env
@@ -32,7 +52,16 @@ jobs:
                   rm tiles.tar.gz
                   echo "Generated parts:" && ls -lh tiles.tar.gz.part.*
             - name: Upload release assets
-              run: echo "" | gh release create ${{ github.event.inputs.release_id }} --repo samuelscheit/wplace-archive -t ${{ github.event.inputs.release_id }} tiles.tar.gz.part.* --notes-file -
+              run: echo "" | gh release create ${{ env.RELEASE_ID }} --repo samuelscheit/wplace-archive -t ${{ env.RELEASE_ID }} tiles.tar.gz.part.* --notes-file -
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            - run: node scripts/s3_upload_directory.ts public/tiles tiles/${{ github.event.inputs.release_id }}
+            - run: node scripts/s3_upload_directory.ts public/tiles tiles/${{ env.RELEASE_ID }}
+            - name: Update snapshots.json
+              run: node scripts/update_snapshots.js ${{ env.RELEASE_ID }}
+            - name: Commit and push changes
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  git add src/ui/snapshots.json
+                  git commit -m "Update snapshots.json [skip ci]"
+                  git push
