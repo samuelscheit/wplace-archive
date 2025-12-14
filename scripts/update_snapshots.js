@@ -11,8 +11,12 @@ try {
 	const data = fs.readFileSync(snapshotsPath, "utf8");
 	let snapshots = JSON.parse(data);
 
-	// const now = new Date().toISOString();
-	const now = process.argv[2] || new Date().toISOString();
+	let now = new Date().toISOString();
+
+	if (process.argv[2]) {
+		// world-2025-12-13T21-27-14.688Z
+		now = process.argv[2].replace("world-", "").replace(/T(\d+)-(\d+)-/g, "T$1:$2");
+	}
 
 	snapshots.unshift(now);
 
