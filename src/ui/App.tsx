@@ -116,6 +116,9 @@ function updateHashParams(updates: Record<string, any>) {
 		}
 	}
 
+	params.zoom = params.z;
+	delete params.z;
+
 	if (Object.keys(params).length === 0) {
 		if (window.location.hash) {
 			window.history.replaceState(null, "", window.location.pathname + window.location.search);
