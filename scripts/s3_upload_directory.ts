@@ -11,10 +11,7 @@ const __dirname = dirname(__filename);
 const uploadedFilesPath = join(__dirname, "uploaded_files.txt");
 const legacyUploadedFilesPath = join(__dirname, "uploaded_files.json");
 
-async function streamJsonStringArray(
-	filePath: string,
-	onValue: (value: string) => void | Promise<void>
-): Promise<void> {
+async function streamJsonStringArray(filePath: string, onValue: (value: string) => void | Promise<void>): Promise<void> {
 	const stream = createReadStream(filePath, { encoding: "utf-8" });
 	let inString = false;
 	let escapeNext = false;
@@ -110,7 +107,7 @@ async function main() {
 	console.log(`Resuming from ${uploadedFilesCount} uploaded files.`);
 
 	const addedUploadedFiles: string[] = [];
-	const uploadedFilesFD = await fs.open(uploadedFilesPath, 'a+');
+	const uploadedFilesFD = await fs.open(uploadedFilesPath, "a+");
 
 	setInterval(() => {
 		if (!addedUploadedFiles.length) {
@@ -148,31 +145,35 @@ async function main() {
 
 	console.log(`Reading files from directory: ${directoryPath}`);
 
-	let i = 0
+	let i = 0;
 
 	for await (const filePath of readDirRecursive(directoryPath)) {
-		if (i++ < uploadedFilesCount) {
-			continue;
-		}
+		try {
+			if (i++ < uploadedFilesCount) {
+				continue;
+			}
 
-		const key = prefix + "/" + relative(directoryPath, filePath);
+			const key = prefix + "/" + relative(directoryPath, filePath);
 
-		process.stdout.write(`\r${i++} - Uploading: ${key}               `);
+			process.stdout.write(`\r${i++} - Uploading: ${key}               `);
 
-		queue.add(async () => {
-			await uploadToS3({
-				content: await fs.readFile(filePath),
-				key,
+			queue.add(async () => {
+				await uploadToS3({
+					content: await fs.readFile(filePath),
+					key,
+				});
+				addedUploadedFiles.push(filePath);
 			});
-			addedUploadedFiles.push(filePath);
-		});
 
-		await queue.onSizeLessThan(concurrency);
+			await queue.onSizeLessThan(concurrency);
+		} catch (error) {
+			console.error(`\nError uploading file ${filePath}:`, error);
+		}
 	}
 
 	await queue.onIdle();
 
-	process.exit()
+	process.exit();
 }
 
 main();
