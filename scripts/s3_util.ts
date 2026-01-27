@@ -89,10 +89,15 @@ export async function uploadToS3(opts: { key: string; content: Buffer; tries?: n
 			}),
 		);
 
-		await fetch(url, {
+		const response = await fetch(url, {
 			method: "PUT",
 			body: opts.content as any,
 		});
+
+		if (!response.ok) {
+			const text = await response.text();
+			throw new Error(`Failed to upload ${opts.key}: ${response.statusText} - ${text}`);
+		}
 	} catch (error) {
 		if (opts.tries >= 3) {
 			console.error(`Failed to upload ${opts.key} after ${opts.tries} tries:`, error);

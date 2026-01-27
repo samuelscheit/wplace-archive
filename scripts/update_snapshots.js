@@ -20,7 +20,7 @@ try {
 
 	snapshots.unshift(now);
 
-	snapshots = snapshots.sort((b, a) => new Date(a).getTime() - new Date(b).getTime());
+	snapshots = Array.from(new Set(snapshots.sort((b, a) => new Date(a).getTime() - new Date(b).getTime())));
 
 	fs.writeFileSync(snapshotsPath, JSON.stringify(snapshots, null, "\t"));
 	console.log(`Updated snapshots.json with new timestamp: ${now}`);
