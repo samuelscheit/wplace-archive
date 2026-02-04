@@ -42,7 +42,12 @@ jobs:
                   node-version: 24
             - run: npm install
             - run: node scripts/download_archive.ts ${{ env.RELEASE_ID }}
-            - run: python3 scripts/vips.py
+            - name: Setup Python venv
+              run: |
+                  python3 -m venv .venv
+                  ./.venv/bin/python -m pip install --upgrade pip
+                  ./.venv/bin/python -m pip install "pyvips[binary]" tqdm
+            - run: ./.venv/bin/python scripts/vips.py
             - run: tar -czf tiles.tar.gz  --no-xattrs -C public/tiles .
             - run: cp /root/wplace-archive/.env .env
             - name: Split archive into <2GB parts
