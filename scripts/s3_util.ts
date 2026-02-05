@@ -4,6 +4,7 @@ import { DeleteObjectsCommand, ListObjectsV2Command, PutObjectCommand } from "@a
 import { awsS3 } from "./s3_client.ts";
 import PQueue from "p-queue";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { Mutex } from "async-mutex";
 
 export async function deleteTilesPrefix(prefix?: string, concurrency = 1) {
 	let continuationToken: string | undefined;
@@ -74,6 +75,12 @@ export async function deleteTilesPrefix(prefix?: string, concurrency = 1) {
 	s.finished = true;
 }
 
+function sleep(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const errorGuard = new Mutex();
+
 export async function uploadToS3(opts: { key: string; content: Buffer; tries?: number }) {
 	if (opts.content.length === 0 && !opts.key.includes(".")) return;
 
@@ -81,6 +88,9 @@ export async function uploadToS3(opts: { key: string; content: Buffer; tries?: n
 		opts.tries = 0;
 	}
 	try {
+		const release = await errorGuard.acquire();
+		release();
+
 		const url = await getSignedUrl(
 			awsS3,
 			new PutObjectCommand({
@@ -99,12 +109,21 @@ export async function uploadToS3(opts: { key: string; content: Buffer; tries?: n
 			throw new Error(`Failed to upload ${opts.key}: ${response.statusText} - ${text}`);
 		}
 	} catch (error) {
-		if (opts.tries >= 3) {
+		let e = error;
+		if (opts.tries! >= 10) {
 			console.error(`Failed to upload ${opts.key} after ${opts.tries} tries:`, error);
 			throw error;
 		}
 
-		opts.tries++;
-		return uploadToS3(opts);
+		await errorGuard.runExclusive(async () => {
+			opts.tries!++;
+			await sleep(10000 * opts.tries!);
+			console.log(`Retrying upload ${opts.key}, attempt ${opts.tries}`);
+		});
+
+		await uploadToS3(opts);
+		e = undefined;
+
+		if (e) throw e;
 	}
 }

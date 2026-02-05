@@ -49,7 +49,6 @@ jobs:
                   ./.venv/bin/python -m pip install "pyvips[binary]" tqdm
             - run: ./.venv/bin/python scripts/vips.py
             - run: tar -czf tiles.tar.gz  --no-xattrs -C public/tiles .
-            - run: cp /root/wplace-archive/.env .env
             - name: Split archive into <2GB parts
               run: |
                   echo "Original archive size:" && ls -lh tiles.tar.gz
@@ -62,6 +61,12 @@ jobs:
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
             - run: node scripts/s3_upload_directory.ts public/tiles tiles/${{ env.RELEASE_ID }}
+              env:
+                  S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+                  S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+                  S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
+                  S3_REGION: ${{ secrets.S3_REGION }}
+                  S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
             - name: Update snapshots.json
               run: node scripts/update_snapshots.js ${{ env.RELEASE_ID }}
             - name: Commit and push changes
