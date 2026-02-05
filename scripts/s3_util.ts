@@ -102,28 +102,25 @@ export async function uploadToS3(opts: { key: string; content: Buffer; tries?: n
 		const response = await fetch(url, {
 			method: "PUT",
 			body: opts.content as any,
+			keepalive: true,
 		});
 
+		const text = await response.text();
 		if (!response.ok) {
-			const text = await response.text();
 			throw new Error(`Failed to upload ${opts.key}: ${response.statusText} - ${text}`);
 		}
 	} catch (error) {
-		let e = error;
 		if (opts.tries! >= 10) {
 			console.error(`Failed to upload ${opts.key} after ${opts.tries} tries:`, error);
 			throw error;
 		}
 
 		await errorGuard.runExclusive(async () => {
+			await sleep(1000 * opts.tries!);
 			opts.tries!++;
-			await sleep(10000 * opts.tries!);
-			console.log(`Retrying upload ${opts.key}, attempt ${opts.tries}`);
+			console.log(`Retrying upload ${opts.key}, attempt ${opts.tries}`, error);
 		});
 
 		await uploadToS3(opts);
-		e = undefined;
-
-		if (e) throw e;
 	}
 }

@@ -139,7 +139,7 @@ async function main() {
 
 	const directoryPath = resolve(args[0]);
 	const prefix = args[1] || "";
-	const concurrency = 1000;
+	const concurrency = 20;
 
 	const queue = new PQueue({ concurrency });
 
