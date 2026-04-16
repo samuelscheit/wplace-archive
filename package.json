@@ -37,7 +37,7 @@
 		"canvas-size": "^2.0.0",
 		"dotenv": "^17.2.3",
 		"framer-motion": "^12.23.25",
-		"freebind": "^0.2.2",
+		"freebind": "^0.2.3",
 		"gunzip-maybe": "^1.4.2",
 		"http-proxy-agent": "^7.0.2",
 		"https-proxy-agent": "^7.0.6",
