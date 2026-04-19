@@ -1,6 +1,6 @@
 import { useLayoutEffect, useState, useRef, useCallback, useMemo, useEffect, AnchorHTMLAttributes } from "react";
 import Timeline from "./Timeline";
-import { addProtocol, ColorSpecification, LayerSpecification, LngLat, LngLatBounds, Map } from "maplibre-gl";
+import { addProtocol, ColorSpecification, LayerSpecification, LngLat, LngLatBounds, Map, RasterTileSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./Timeline.css";
 import "./App.css";
@@ -18,6 +18,8 @@ import { useEvent } from "./use-event.js";
 import snapshots from "./snapshots.json";
 
 const WORLD_N = 85.0511287798066; // top latitude in EPSG:3857
+const ARCHIVE_SOURCE_ID = "archive-source";
+const ARCHIVE_LAYER_ID = "archive-layer";
 
 // Times available for the time-travel tile layers. Use valid ISO strings (Map overlay folders use ':' replaced by '-').
 const timeStrings: string[] = snapshots;
@@ -71,6 +73,14 @@ function timeSlugFrance(d: Date) {
 	if (isNaN(d.getTime())) return "now";
 
 	return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}-${d.getHours().toString().padStart(2, "0")}h${d.getMinutes().toString().padStart(2, "0")}`;
+}
+
+function getArchiveTileTemplate(time: Date, isFranceMode: boolean) {
+	if (isFranceMode) {
+		return `https://wplace.zapto.zip/api/tiles/{x}/{y}/${timeSlugFrance(time)}.png?cache=true&best-effort=true`;
+	}
+
+	return `https://wplace_cdn.samuelscheit.com/wplace-samuelscheit/tiles/world-${timeSlug(time)}/{z}/{x}/{y}.png`;
 }
 
 function recoverIsoFromSlug(slug: string) {
@@ -133,9 +143,9 @@ function updateHashParams(updates: Record<string, any>) {
 function App() {
 	const [theme, setTheme] = useState<Theme>(() => getInitialTheme());
 	const isDarkTheme = theme === "dark";
-	const [selectionChanged, setSelectionChanged] = useState(true);
 	const mapRef = useRef<Map | null>(null);
 	const mapReadyRef = useRef(false);
+	const activeArchiveTemplateRef = useRef<string | null>(null);
 	const [forceUpdate, setForceUpdate] = useState(0);
 	const [isAboutOpen, setIsAboutOpen] = useState(false);
 	const [isDonateOpen, setIsDonateOpen] = useState(false);
@@ -233,8 +243,9 @@ function App() {
 		return view;
 	}
 
-	const currentTime = times[selectedIndex];
-	let currentSlug = timeSlug(currentTime);
+	const currentTime = times[selectedIndex] ?? times[0] ?? new Date();
+	const currentSlug = timeSlug(currentTime);
+	const currentArchiveTemplate = getArchiveTileTemplate(currentTime, times === franceTimes);
 
 	useLayoutEffect(() => {
 		const map = new Map({
@@ -254,40 +265,12 @@ function App() {
 						type: "vector",
 						url: "https://tiles.openfreemap.org/planet",
 					},
-					...Object.fromEntries(
-						defaultTimes.map((time) => {
-							return [
-								`tiles-${timeSlug(time)}`,
-								{
-									type: "raster",
-									// https://wplace_cdn.samuelscheit.com/wplace-samuelscheit/tiles/world-2025-10-18T07-23-59.887Z/9/209/82.png
-									tiles: [
-										`https://wplace_cdn.samuelscheit.com/wplace-samuelscheit/tiles/world-${timeSlug(time)}/{z}/{x}/{y}.png`,
-									],
-									// tileSize: TILE_SIZE,
-									scheme: "xyz",
-									maxzoom: 11,
-								},
-							];
-						}),
-					),
-					...Object.fromEntries(
-						franceTimes.map((time) => {
-							return [
-								`tiles-${timeSlug(time)}`,
-								{
-									type: "raster",
-									tiles: [
-										`https://wplace.zapto.zip/api/tiles/{x}/{y}/${timeSlugFrance(time)}.png?cache=true&best-effort=true`,
-									],
-									// tileSize: TILE_SIZE,
-									scheme: "xyz",
-									maxzoom: 11,
-									// minzoom: 11,
-								},
-							];
-						}),
-					),
+					[ARCHIVE_SOURCE_ID]: {
+						type: "raster",
+						tiles: [currentArchiveTemplate],
+						scheme: "xyz",
+						maxzoom: 11,
+					},
 				},
 				layers: [
 					{
@@ -307,23 +290,18 @@ function App() {
 						l.layout.visibility = isDarkTheme ? "visible" : "none";
 						return l;
 					}),
-					...[...defaultTimes, ...franceTimes].map((x) => {
-						const visibility = timeSlug(x) === currentSlug ? "visible" : "none";
-
-						return {
-							id: `tiles-${timeSlug(x)}`,
-							type: "raster",
-							source: `tiles-${timeSlug(x)}`,
-							paint: {
-								"raster-resampling": "nearest",
-								"raster-opacity": 1,
-							},
-							layout: {
-								visibility, // visible
-								// visibility: "visible", // visible
-							},
-						};
-					}),
+					{
+						id: ARCHIVE_LAYER_ID,
+						type: "raster",
+						source: ARCHIVE_SOURCE_ID,
+						paint: {
+							"raster-resampling": "nearest",
+							"raster-opacity": 1,
+						},
+						layout: {
+							visibility: "visible",
+						},
+					},
 				],
 			},
 			renderWorldCopies: false,
@@ -332,6 +310,7 @@ function App() {
 		});
 
 		mapRef.current = map;
+		activeArchiveTemplateRef.current = currentArchiveTemplate;
 		// @ts-ignore
 		globalThis.map = map;
 		map.on("load", () => {
@@ -357,40 +336,18 @@ function App() {
 		// re-create map only once; time changes handled separately
 	}, []);
 
-	const updateVisiblityLayers = useEvent(function updateVisiblityLayers() {
+	const updateArchiveSource = useEvent(function updateArchiveSource() {
 		if (!currentSlug) return;
 
 		const map = mapRef.current;
 		if (!map || !mapReadyRef.current) return;
+		if (activeArchiveTemplateRef.current === currentArchiveTemplate) return;
 
-		const layer = map.getLayer(`tiles-${currentSlug}`);
-		if (!layer) return;
+		const source = map.getSource(ARCHIVE_SOURCE_ID) as RasterTileSource | undefined;
+		if (!source) return;
 
-		map.setLayoutProperty(`tiles-${currentSlug}`, "visibility", "visible");
-		map.setPaintProperty(`tiles-${currentSlug}`, "raster-opacity", 1);
-		const interval = setInterval(() => {
-			if (map.areTilesLoaded()) {
-				clearInterval(interval);
-
-				const otherLayers =
-					map.getStyle().layers?.filter((l) => l.id.startsWith("tiles-") && l.id !== `tiles-${currentSlug}`) || [];
-				otherLayers.forEach((l) => {
-					const otherLayer = map.getLayer(l.id);
-					if (!otherLayer) return;
-
-					map.setPaintProperty(l.id, "raster-opacity", 0);
-					if (selectionChanged) {
-						setTimeout(() => {
-							// map.setLayoutProperty(l.id, "visibility", "visible");
-						}, 100);
-					}
-				});
-
-				map.triggerRepaint();
-			}
-		}, 30);
-
-		return interval;
+		source.setTiles([currentArchiveTemplate]);
+		activeArchiveTemplateRef.current = currentArchiveTemplate;
 	});
 
 	const syncTimes = useEvent((c?: LngLat, z?: number, selectedTime?: number) => {
@@ -437,9 +394,6 @@ function App() {
 			});
 			if (nearestIndex !== selectedIndex) {
 				setSelectedIndex(nearestIndex);
-				selectedIndex = nearestIndex;
-				currentSlug = timeSlug(newTimes[nearestIndex]);
-				updateVisiblityLayers();
 			}
 		}
 	});
@@ -457,7 +411,7 @@ function App() {
 
 	// Central hash sync (uses current map + selected time)
 	const syncHash = useEvent(
-		(index = selectedIndex, selChanged = selectionChanged) => {
+		(index = selectedIndex) => {
 			if (typeof index !== "number") index = selectedIndex;
 			const map = mapRef.current;
 			if (!map) return;
@@ -473,20 +427,8 @@ function App() {
 				time: slug,
 				pumpkins: isPumpkinsOpen ? "1" : undefined,
 			});
-			setSelectionChanged(false);
-
-			if (selChanged) return;
-
-			// unload all other layers which aren't active
-			const otherLayers = map.getStyle()?.layers?.filter((l) => l.id.startsWith("tiles-") && l.id !== `tiles-${currentSlug}`) || [];
-			otherLayers.forEach((l) => {
-				const otherLayer = map.getLayer(l.id);
-				if (!otherLayer) return;
-
-				map.setLayoutProperty(l.id, "visibility", "none");
-			});
 		},
-		[selectedIndex, selectionChanged],
+		[selectedIndex],
 	);
 
 	if (!initialView.center) {
@@ -521,22 +463,14 @@ function App() {
 	}, [syncHash]);
 
 	// Update raster source when the selected time changes
-	useLayoutEffect(() => {
-		const map = mapRef.current;
-		if (!map || !mapReadyRef.current) return;
-
-		const interval = updateVisiblityLayers();
-
-		return () => {
-			map.triggerRepaint();
-			clearInterval(interval);
-		};
-	}, [currentSlug, forceUpdate]);
+	useEffect(() => {
+		updateArchiveSource();
+	}, [currentSlug, currentArchiveTemplate, forceUpdate, updateArchiveSource]);
 
 	const onSelect = useCallback((idx: number) => {
 		setSelectedIndex(idx);
-		syncHash(idx, true);
-	}, []);
+		syncHash(idx);
+	}, [syncHash]);
 
 	const takeScreenshot = async () => {
 		setIsTakingScreenshot(true);
@@ -545,7 +479,7 @@ function App() {
 		let canvas = undefined as any as OffscreenCanvas;
 
 		try {
-			const source = mapRef.current.getSource(`tiles-${currentSlug}`);
+			const source = mapRef.current.getSource(ARCHIVE_SOURCE_ID);
 			if (!source) throw new Error("No source found for current tiles");
 
 			const generator = getImageFromMap(mapRef.current, source);
