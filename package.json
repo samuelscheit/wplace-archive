@@ -33,11 +33,11 @@
 		"@inkjs/ui": "^2.0.0",
 		"@tailwindcss/vite": "^4.1.17",
 		"async-mutex": "^0.5.0",
-		"axios": "^1.13.2",
+		"axios": "^1.15.0",
 		"canvas-size": "^2.0.0",
 		"dotenv": "^17.2.3",
 		"framer-motion": "^12.23.25",
-		"freebind": "^0.2.2",
+		"freebind": "^0.2.3",
 		"gunzip-maybe": "^1.4.2",
 		"http-proxy-agent": "^7.0.2",
 		"https-proxy-agent": "^7.0.6",
@@ -52,10 +52,10 @@
 		"react": "~19.2.1",
 		"react-dom": "~19.2.1",
 		"sharp": "^0.34.5",
-		"tar": "^7.5.7",
+		"tar": "^7.5.11",
 		"tar-fs": "^3.1.1",
 		"tar-stream": "^3.1.7",
-		"undici": "^7.18.2"
+		"undici": "^7.24.0"
 	},
 	"trustedDependencies": [
 		"@tailwindcss/oxide"
