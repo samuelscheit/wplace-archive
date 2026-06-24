@@ -5,8 +5,18 @@ on:
         - cron: "0 0 * * 0"
     workflow_dispatch:
         inputs:
-            release_id:
+            start_x:
                 required: false
+                default: "0"
+            start_y:
+                required: false
+                default: "0"
+            width:
+                required: false
+                default: "2048"
+            height:
+                required: false
+                default: "2048"
 
 permissions:
     contents: write # needed to create / update releases
@@ -14,34 +24,34 @@ permissions:
 
 jobs:
     build:
-        runs-on: self-hosted
+        runs-on: [self-hosted, Linux, X64]
         timeout-minutes: 1440
 
         steps:
             - uses: actions/checkout@v4
-            - name: Determine Release ID
-              id: get_release
+            - name: Create Release ID
               run: |
-                  if [ -n "${{ inputs.release_id }}" ]; then
-                      echo "Using provided Release ID: ${{ inputs.release_id }}"
-                      echo "RELEASE_ID=${{ inputs.release_id }}" >> $GITHUB_ENV
-                  else
-                      echo "Fetching latest Release ID from murolem/wplace-archives..."
-                      LATEST_RELEASE=$(gh release list --repo murolem/wplace-archives --limit 1 --json tagName --jq '.[0].tagName')
-                      if [ -z "$LATEST_RELEASE" ]; then
-                          echo "Error: Could not fetch latest release ID"
-                          exit 1
-                      fi
-                      echo "Latest Release ID: $LATEST_RELEASE"
-                      echo "RELEASE_ID=$LATEST_RELEASE" >> $GITHUB_ENV
-                  fi
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  RELEASE_ID="world-$(date -u +%Y-%m-%dT%H-%M-%S.%3NZ)"
+                  echo "RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
+                  echo "Release ID: $RELEASE_ID"
             - uses: actions/setup-node@v4
               with:
                   node-version: 24
-            - run: npm install
-            - run: node scripts/download_archive.ts ${{ env.RELEASE_ID }}
+            - run: npm ci
+            - name: Configure IPv6 freebind route
+              run: sudo ip -6 route replace local "${{ secrets.WPLACE_IPV6_SUBNET }}" dev lo
+            - name: Archive world tiles
+              run: |
+                  node scripts/archive_world.ts \
+                      --start-x=${{ github.event.inputs.start_x || '0' }} \
+                      --start-y=${{ github.event.inputs.start_y || '0' }} \
+                      --width=${{ github.event.inputs.width || '2048' }} \
+                      --height=${{ github.event.inputs.height || '2048' }}
+              env:
+                  WPLACE_IPV6_SUBNET: ${{ secrets.WPLACE_IPV6_SUBNET }}
+                  WPLACE_ARCHIVE_RPS: ${{ vars.WPLACE_ARCHIVE_RPS || '1000' }}
+                  WPLACE_ARCHIVE_CONCURRENCY: ${{ vars.WPLACE_ARCHIVE_CONCURRENCY || '250' }}
+                  WPLACE_ARCHIVE_SERVER_RPS_LIMIT: ${{ vars.WPLACE_ARCHIVE_SERVER_RPS_LIMIT || '4' }}
             - name: Setup Python venv
               run: |
                   python3 -m venv .venv
@@ -73,9 +83,9 @@ jobs:
               run: |
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
-                  git add src/ui/snapshots.json
-                  git commit -m "Update snapshots.json"
                   git restore package-lock.json
+                  git add src/ui/snapshots.json
+                  git commit -m "Update snapshots.json [skip ci]"
                   git config pull.rebase false
                   git pull
                   git push

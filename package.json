@@ -7,14 +7,13 @@
 		"dev": "vite",
 		"build": "tsc -b && vite build",
 		"preview": "vite preview --host 0.0.0.0",
-		"compile": "node-gyp configure build"
+		"compile": "node-gyp configure build",
+		"archive:world": "node scripts/archive_world.ts"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.3.3",
 		"@types/canvas-size": "^1.2.2",
-		"@types/jsonfile": "^6.1.4",
 		"@types/node": "^24.10.1",
-		"@types/tar-fs": "^2.0.4",
 		"autoprefixer": "^10.4.22",
 		"postcss": "^8.5.14",
 		"tailwindcss": "^4.1.17"
@@ -33,16 +32,13 @@
 		"@inkjs/ui": "^2.0.0",
 		"@tailwindcss/vite": "^4.3.1",
 		"async-mutex": "^0.5.0",
-		"axios": "^1.16.0",
 		"canvas-size": "^2.0.0",
 		"dotenv": "^17.2.3",
 		"framer-motion": "^12.23.25",
 		"freebind": "^0.2.3",
-		"gunzip-maybe": "^1.4.2",
 		"http-proxy-agent": "^7.0.2",
 		"https-proxy-agent": "^7.0.6",
 		"ink": "^6.5.1",
-		"jsonfile": "^6.2.0",
 		"maplibre-gl": "^5.14.0",
 		"mobx": "^6.15.0",
 		"mobx-react": "^9.2.1",
@@ -52,9 +48,6 @@
 		"react": "~19.2.1",
 		"react-dom": "~19.2.1",
 		"sharp": "^0.34.5",
-		"tar": "^7.5.16",
-		"tar-fs": "^3.1.1",
-		"tar-stream": "^3.1.7",
 		"undici": "^7.24.0"
 	},
 	"trustedDependencies": [
