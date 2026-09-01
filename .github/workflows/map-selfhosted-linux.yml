@@ -70,6 +70,9 @@ jobs:
               run: echo "" | gh release create ${{ env.RELEASE_ID }} -p --repo samuelscheit/wplace-archive -t ${{ env.RELEASE_ID }} tiles.tar.gz.part.* --notes-file -
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            - name: Clean up local release archive
+              if: always()
+              run: rm -f -- tiles.tar.gz tiles.tar.gz.part.*
             - run: node scripts/s3_upload_directory.ts public/tiles tiles/${{ env.RELEASE_ID }}
               env:
                   S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
