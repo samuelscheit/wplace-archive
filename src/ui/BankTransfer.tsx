@@ -26,11 +26,11 @@ const bankDetails = {
 		symbol: "¥",
 		flag: "🇯🇵",
 	},
-	CNY: {
-		iban: "GB60 TRWI 2308 0135 5928 49",
-		bic: "TRWIGB2LXXX",
-		symbol: "¥",
-		flag: "🇨🇳",
+	HKD: {
+		accountNumber: "796806449",
+		routingNumber: "478",
+		symbol: "$",
+		flag: "🇭🇰",
 	},
 };
 
@@ -99,7 +99,7 @@ export function BankTransfer({ closeBankTransfer }: { closeBankTransfer: () => v
 										<span className="font-mono select-all notranslate">Samuel Vincenz Scheit</span>
 									</td>
 								</tr>
-								{selectedCurrency === "USD" || selectedCurrency === "GBP" ? (
+								{currentDetails.accountNumber ? (
 									<>
 										<tr>
 											<td className="bg-neutral-50 px-3 py-2 font-medium text-neutral-700">Account Number</td>
@@ -109,7 +109,7 @@ export function BankTransfer({ closeBankTransfer }: { closeBankTransfer: () => v
 										</tr>
 										<tr>
 											<td className="bg-neutral-50 px-3 py-2 font-medium text-neutral-700">
-												{selectedCurrency === "USD" ? "Routing number" : "Sort code"}
+												{selectedCurrency === "GBP" ? "Sort code" : "Routing number"}
 											</td>
 											<td className="px-3 py-2">
 												<span className="font-mono select-all notranslate">{currentDetails.routingNumber}</span>
