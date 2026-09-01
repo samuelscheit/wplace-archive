@@ -1,20 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-
 export function PumpkinsModal({ onClose, openAbout }: { onClose: () => void; openAbout: () => void }) {
-
-	useEffect(() => {
-		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				event.preventDefault();
-				onClose();
-			}
-		};
-
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [onClose]);
-
 	return (
 		<div
 			className="absolute inset-0 z-20 bg-black/50 flex items-center justify-center backdrop-blur-sm"

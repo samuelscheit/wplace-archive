@@ -26,6 +26,12 @@ const bankDetails = {
 		symbol: "¥",
 		flag: "🇯🇵",
 	},
+	CNY: {
+		iban: "GB60 TRWI 2308 0135 5928 49",
+		bic: "TRWIGB2LXXX",
+		symbol: "¥",
+		flag: "🇨🇳",
+	},
 };
 
 export function BankTransfer({ closeBankTransfer }: { closeBankTransfer: () => void }) {

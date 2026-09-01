@@ -12,6 +12,7 @@ import { BankTransfer } from "./BankTransfer";
 import { Donate } from "./Donate";
 import { About } from "./About";
 import { Crypto } from "./Crypto";
+import { WeChat } from "./WeChat";
 import { PumpkinsModal } from "./PumpkinsModal";
 // @ts-ignore
 import { useEvent } from "./use-event.js";
@@ -151,6 +152,7 @@ function App() {
 	const [isDonateOpen, setIsDonateOpen] = useState(false);
 	const [isCryptoOpen, setIsCryptoOpen] = useState(false);
 	const [isBankTransferOpen, setIsBankTransferOpen] = useState(false);
+	const [isWeChatOpen, setIsWeChatOpen] = useState(false);
 	const [isPumpkinsOpen, setIsPumpkinsOpen] = useState(() => {
 		if (typeof window === "undefined") return false;
 		const params = parseHash();
@@ -561,7 +563,10 @@ function App() {
 
 		setIsDonateOpen(true);
 	}, []);
-	const closeDonate = useCallback(() => setIsDonateOpen(false), []);
+	const closeDonate = useCallback(() => {
+		setIsWeChatOpen(false);
+		setIsDonateOpen(false);
+	}, []);
 	const openBankTransfer = useCallback(() => {
 		setIsBankTransferOpen(true);
 	}, []);
@@ -570,47 +575,61 @@ function App() {
 		setIsCryptoOpen(true);
 	}, []);
 	const closeCrypto = useCallback(() => setIsCryptoOpen(false), []);
+	const openWeChat = useCallback(() => {
+		setIsWeChatOpen(true);
+	}, []);
+	const closeWeChat = useCallback(() => setIsWeChatOpen(false), []);
 	const closePumpkins = useCallback(() => setIsPumpkinsOpen(false), []);
+
+	const handleModalEscape = useCallback(
+		(event: KeyboardEvent) => {
+			if (event.key !== "Escape") return;
+
+			// Close only the uppermost open modal. Several dialogs can be open at
+			// once (for example, WeChat over the donation dialog), so independent
+			// listeners would otherwise close the whole modal stack at once.
+			const closeTopModal = isWeChatOpen
+				? closeWeChat
+				: isCryptoOpen
+					? closeCrypto
+					: isBankTransferOpen
+						? closeBankTransfer
+						: isPumpkinsOpen
+							? closePumpkins
+							: isDonateOpen
+								? closeDonate
+								: isAboutOpen
+									? closeAbout
+									: null;
+			if (!closeTopModal) return;
+
+			event.preventDefault();
+			closeTopModal();
+		},
+		[
+			isWeChatOpen,
+			isCryptoOpen,
+			isBankTransferOpen,
+			isPumpkinsOpen,
+			isDonateOpen,
+			isAboutOpen,
+			closeWeChat,
+			closeCrypto,
+			closeBankTransfer,
+			closePumpkins,
+			closeDonate,
+			closeAbout,
+		],
+	);
 
 	useEffect(() => {
 		updateHashParams({ pumpkins: isPumpkinsOpen ? "1" : undefined });
 	}, [isPumpkinsOpen]);
 
 	useEffect(() => {
-		if (!isAboutOpen) return;
-		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				event.preventDefault();
-				closeAbout();
-			}
-		};
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [isAboutOpen, closeAbout]);
-
-	useEffect(() => {
-		if (!isDonateOpen) return;
-		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				event.preventDefault();
-				closeDonate();
-			}
-		};
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [isDonateOpen, closeDonate]);
-
-	useEffect(() => {
-		if (!isBankTransferOpen) return;
-		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				event.preventDefault();
-				closeBankTransfer();
-			}
-		};
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [isBankTransferOpen, closeBankTransfer]);
+		window.addEventListener("keydown", handleModalEscape);
+		return () => window.removeEventListener("keydown", handleModalEscape);
+	}, [handleModalEscape]);
 
 	return (
 		<>
@@ -752,8 +771,16 @@ function App() {
 			</div>
 			{isAboutOpen && <About closeAbout={closeAbout} mapRef={mapRef} openBankTransfer={openBankTransfer} openDonate={openDonate} />}
 			{isBankTransferOpen && <BankTransfer closeBankTransfer={closeBankTransfer} />}
-			{isDonateOpen && <Donate openBankTransfer={openBankTransfer} closeDonate={closeDonate} openCrypto={openCrypto} />}
+			{isDonateOpen && (
+				<Donate
+					openBankTransfer={openBankTransfer}
+					closeDonate={closeDonate}
+					openCrypto={openCrypto}
+					openWeChat={openWeChat}
+				/>
+			)}
 			{isCryptoOpen && <Crypto closeCrypto={closeCrypto} />}
+			{isDonateOpen && isWeChatOpen && <WeChat closeWeChat={closeWeChat} />}
 			{isPumpkinsOpen && <PumpkinsModal onClose={closePumpkins} openAbout={openAbout} />}
 		</>
 	);
