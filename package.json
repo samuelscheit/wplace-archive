@@ -39,7 +39,7 @@
 		"http-proxy-agent": "^7.0.2",
 		"https-proxy-agent": "^7.0.6",
 		"ink": "^6.5.1",
-		"maplibre-gl": "^5.14.0",
+		"maplibre-gl": "^6.4.1",
 		"mobx": "^6.15.0",
 		"mobx-react": "^9.2.1",
 		"octokit": "^5.0.5",
