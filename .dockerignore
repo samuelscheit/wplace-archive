@@ -3,3 +3,7 @@ node_modules/
 .venv/
 public/tiles*/
 scripts/
+build/
+dist/
+.git/
+.DS_Store

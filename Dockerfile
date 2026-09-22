@@ -1,15 +1,15 @@
-FROM oven/bun:latest
+FROM node:24-bookworm-slim
 
 WORKDIR /app
 
-COPY package*.json bun.lock* ./
+COPY package.json package-lock.json ./
 
-RUN bun install --ignore-scripts
+RUN npm ci --ignore-scripts
 
 COPY . .
 
-RUN bun run build 
+RUN npm run build
 
 EXPOSE 4173
 
-CMD ["bun", "run", "preview"]
+CMD ["npm", "run", "preview"]
