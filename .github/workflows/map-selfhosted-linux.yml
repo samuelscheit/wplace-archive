@@ -24,7 +24,7 @@ permissions:
 
 jobs:
     build:
-        runs-on: [self-hosted, Linux, X64]
+        runs-on: [self-hosted, Linux, X64, lxhalle]
         timeout-minutes: 1440
 
         steps:
