@@ -1,0 +1,30 @@
+name: Validate dependencies
+
+on:
+    push:
+        paths:
+            - package.json
+            - package-lock.json
+            - .github/workflows/validate-dependencies.yml
+    pull_request:
+        paths:
+            - package.json
+            - package-lock.json
+            - .github/workflows/validate-dependencies.yml
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    install:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+            - run: npm ci
+            - name: Verify lockfile stays unchanged
+              run: git diff --exit-code -- package.json package-lock.json
