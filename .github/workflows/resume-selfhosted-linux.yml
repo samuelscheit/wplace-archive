@@ -1,0 +1,163 @@
+name: Resume archived world map (no tile downloads)
+
+on:
+    workflow_dispatch:
+        inputs:
+            release_id:
+                description: Existing snapshot ID to preserve
+                required: true
+                default: world-2026-10-19T22-38-26.284Z
+            expected_base_tiles:
+                description: Exact number of already-fetched level-11 PNGs
+                required: true
+                default: "2150422"
+
+permissions:
+    contents: write
+
+concurrency:
+    group: wplace-archive-respond5
+    cancel-in-progress: false
+
+jobs:
+    resume:
+        runs-on: [self-hosted, Linux, X64, respond5]
+        timeout-minutes: 1440
+        env:
+            RELEASE_ID: ${{ inputs.release_id }}
+            EXPECTED_BASE_TILES: ${{ inputs.expected_base_tiles }}
+            TILE_JOBS: "4"
+            VIPS_CONCURRENCY: "1"
+            S3_UPLOAD_CONCURRENCY: "64"
+            AWS_MAX_ATTEMPTS: "10"
+        steps:
+            # This check intentionally precedes checkout. Never clean the workspace.
+            - name: Require the existing level-11 archive
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  [[ "$RELEASE_ID" =~ ^world-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}\.[0-9]{3}Z$ ]]
+                  [[ "$EXPECTED_BASE_TILES" =~ ^[1-9][0-9]*$ ]]
+                  test -d public/tiles/11
+                  actual=$(find public/tiles/11 -type f -name '*.png' -printf '.\n' | wc -l)
+                  test "$actual" -eq "$EXPECTED_BASE_TILES"
+                  echo "Preserving $actual existing base tiles for $RELEASE_ID"
+                  echo "STATE_DIR=$GITHUB_WORKSPACE/public/.resume-state/$RELEASE_ID" >> "$GITHUB_ENV"
+            - uses: actions/checkout@v4
+              with:
+                  clean: false
+                  fetch-depth: 0
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+            - name: Validate prepared dependencies and configured credentials
+              env:
+                  S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+                  S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+                  S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
+                  S3_REGION: ${{ secrets.S3_REGION }}
+                  S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+              run: |
+                  set -euo pipefail
+                  .venv/bin/python -c 'import pyvips, tqdm'
+                  node --input-type=module -e 'await import("@aws-sdk/client-s3"); await import("p-queue")'
+                  for name in S3_BUCKET_NAME S3_ACCESS_KEY_ID S3_SECRET_KEY S3_REGION S3_ENDPOINT; do
+                      test -n "${!name}" || { echo "Missing configured secret: $name"; exit 1; }
+                  done
+                  command -v pigz
+                  mkdir -p "$STATE_DIR"
+            - name: Test continuation scripts
+              run: |
+                  .venv/bin/python -m unittest discover -s tests -p test_vips.py -v
+                  node --test tests/s3_upload_directory.test.ts tests/verify_s3_snapshot.test.ts
+            - name: Generate zoom levels 10 through 0 from existing level 11
+              run: |
+                  set -euo pipefail
+                  if [[ ! -f "$STATE_DIR/pyramid.complete" ]]; then
+                      .venv/bin/python scripts/vips.py
+                      touch "$STATE_DIR/pyramid.complete"
+                  fi
+                  for zoom in {0..11}; do
+                      count=$(find "public/tiles/$zoom" -type f -name '*.png' -printf '.\n' | wc -l)
+                      echo "Zoom $zoom: $count PNGs"
+                      test "$count" -gt 0
+                      if [[ "$zoom" == 11 ]]; then test "$count" -eq "$EXPECTED_BASE_TILES"; fi
+                  done
+            - name: Package and split archive into parts smaller than 2 GB
+              run: |
+                  set -euo pipefail
+                  if [[ ! -f "$STATE_DIR/archive.complete" ]]; then
+                      rm -f -- "$STATE_DIR"/tiles.tar.gz.part.* "$STATE_DIR/tiles.sha256"
+                      tar --no-xattrs -C public/tiles -cf - . |
+                          pigz -p 2 |
+                          split -b 1999M -d -a 3 - "$STATE_DIR/tiles.tar.gz.part."
+                      cat "$STATE_DIR"/tiles.tar.gz.part.* | gzip -t
+                      (cd "$STATE_DIR" && sha256sum tiles.tar.gz.part.* > tiles.sha256)
+                      touch "$STATE_DIR/archive.complete"
+                  fi
+                  (cd "$STATE_DIR" && sha256sum -c tiles.sha256)
+                  ls -lh "$STATE_DIR"/tiles.tar.gz.part.*
+            - name: Upload release assets without publishing an incomplete snapshot
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  if ! gh release view "$RELEASE_ID" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+                      gh release create "$RELEASE_ID" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+                          --draft --prerelease --title "$RELEASE_ID" --notes "Archived world snapshot; concatenate tiles.tar.gz.part.* before extracting."
+                  fi
+                  for asset in "$STATE_DIR"/tiles.tar.gz.part.* "$STATE_DIR/tiles.sha256"; do
+                      name=$(basename "$asset")
+                      size=$(stat -c %s "$asset")
+                      remote_size=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_ID" \
+                          --jq ".assets[] | select(.name == \"$name\" and .state == \"uploaded\") | .size")
+                      if [[ "$remote_size" == "$size" ]]; then
+                          echo "Already uploaded: $name ($size bytes)"
+                      else
+                          gh release upload "$RELEASE_ID" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
+                      fi
+                  done
+            - name: Upload all tiles to the preserved S3 prefix
+              env:
+                  S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+                  S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+                  S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
+                  S3_REGION: ${{ secrets.S3_REGION }}
+                  S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+              run: node scripts/s3_upload_directory.ts public/tiles "tiles/$RELEASE_ID"
+            - name: Verify every S3 object key and byte size
+              env:
+                  S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+                  S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+                  S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
+                  S3_REGION: ${{ secrets.S3_REGION }}
+                  S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+              run: node scripts/verify_s3_snapshot.ts public/tiles "tiles/$RELEASE_ID"
+            - name: Publish the verified release
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: gh release edit "$RELEASE_ID" --draft=false --prerelease --repo "$GITHUB_REPOSITORY"
+            - name: Update and commit snapshots.json only after successful uploads
+              run: |
+                  set -euo pipefail
+                  node scripts/update_snapshots.js "$RELEASE_ID"
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  git add src/ui/snapshots.json
+                  if ! git diff --cached --quiet; then
+                      git commit -m "Publish $RELEASE_ID snapshot [skip ci]"
+                  fi
+                  for attempt in 1 2 3; do
+                      git pull --rebase origin main
+                      if git push origin HEAD:main; then
+                          touch "$STATE_DIR/snapshot.complete"
+                          exit 0
+                      fi
+                      sleep 5
+                  done
+                  exit 1
+            - name: Remove local archive parts after publication (keep all PNG tiles)
+              if: success()
+              run: |
+                  rm -f -- "$STATE_DIR"/tiles.tar.gz.part.* "$STATE_DIR/archive.complete"
+                  echo "Published $RELEASE_ID; original level-11 tiles and pyramid retained." >> "$GITHUB_STEP_SUMMARY"

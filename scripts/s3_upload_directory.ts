@@ -1,179 +1,135 @@
-import * as fs from "fs/promises";
-import { existsSync, writeFileSync, createReadStream, createWriteStream } from "fs";
-import { dirname, join, relative, resolve } from "path";
-import { uploadToS3 } from "./s3_util.ts";
+import * as fs from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { createHash } from "node:crypto";
+import { dirname, join, relative, resolve } from "node:path";
+import { createInterface } from "node:readline";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { awsS3 } from "./s3_client.ts";
 import PQueue from "p-queue";
-import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+type UploadOptions = {
+	checkpointPath?: string;
+	concurrency?: number;
+	uploadFile?: (filePath: string, key: string) => Promise<void>;
+};
 
-const uploadedFilesPath = join(__dirname, "uploaded_files.txt");
-const legacyUploadedFilesPath = join(__dirname, "uploaded_files.json");
-
-async function streamJsonStringArray(filePath: string, onValue: (value: string) => void | Promise<void>): Promise<void> {
-	const stream = createReadStream(filePath, { encoding: "utf-8" });
-	let inString = false;
-	let escapeNext = false;
-	let current = "";
-
-	for await (const chunk of stream) {
-		const text = typeof chunk === "string" ? chunk : chunk.toString("utf-8");
-		for (let i = 0; i < text.length; i++) {
-			const char = text[i];
-			if (!inString) {
-				if (char === '"') {
-					inString = true;
-					current = "";
-				}
-				continue;
-			}
-			if (escapeNext) {
-				current += "\\" + char;
-				escapeNext = false;
-				continue;
-			}
-			if (char === "\\") {
-				escapeNext = true;
-				continue;
-			}
-			if (char === '"') {
-				await onValue(JSON.parse(`"${current}"`));
-				inString = false;
-				continue;
-			}
-			current += char;
-		}
-	}
-
-	if (inString || escapeNext) {
-		throw new Error(`Unexpected EOF while parsing ${filePath}`);
+async function* filesUnder(directory: string): AsyncGenerator<string> {
+	// Do not hide traversal errors: missing files must fail the publication.
+	for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+		const fullPath = join(directory, entry.name);
+		if (entry.isDirectory()) yield* filesUnder(fullPath);
+		else if (entry.isFile()) yield fullPath;
+		else throw new Error(`Unsupported non-regular file: ${fullPath}`);
 	}
 }
 
-async function countLines(filePath: string): Promise<number> {
-	let count = 0;
-	let hasDanglingChars = false;
+export async function uploadDirectory(directory: string, prefix: string, options: UploadOptions = {}) {
+	const root = await fs.realpath(resolve(directory));
+	prefix = prefix.replace(/^\/+|\/+$/g, "");
+	const identity = JSON.stringify({ root, prefix, bucket: process.env.S3_BUCKET_NAME, endpoint: process.env.S3_ENDPOINT });
+	const hash = createHash("sha256").update(identity).digest("hex");
+	const checkpoint = options.checkpointPath ?? join(dirname(fileURLToPath(import.meta.url)), ".s3-upload-state", `${hash}.jsonl`);
+	await fs.mkdir(dirname(checkpoint), { recursive: true });
+	const metadata = `${checkpoint}.meta.json`;
+	try {
+		await fs.writeFile(metadata, identity, { flag: "wx" });
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+		if ((await fs.readFile(metadata, "utf8")) !== identity) throw new Error("Upload checkpoint belongs to a different destination");
+	}
 
-	for await (const chunk of createReadStream(filePath, { encoding: "utf-8" })) {
-		const text = typeof chunk === "string" ? chunk : chunk.toString("utf-8");
-		for (let i = 0; i < text.length; i++) {
-			if (text[i] === "\n") {
-				count++;
-				hasDanglingChars = false;
-			} else {
-				hasDanglingChars = true;
-			}
+	// Track successful object keys, never directory offsets or completion order.
+	const uploaded = new Set<string>();
+	try {
+		for await (const line of createInterface({ input: createReadStream(checkpoint), crlfDelay: Infinity })) {
+			if (line) uploaded.add(JSON.parse(line));
 		}
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 	}
-
-	return count + (hasDanglingChars ? 1 : 0);
-}
-
-async function migrateUploadedFiles(): Promise<number> {
-	if (existsSync(uploadedFilesPath)) {
-		return countLines(uploadedFilesPath);
-	}
-
-	if (!existsSync(legacyUploadedFilesPath)) {
-		writeFileSync(uploadedFilesPath, "", "utf-8");
-		return 0;
-	}
-
-	let count = 0;
-	const writer = createWriteStream(uploadedFilesPath, { encoding: "utf-8" });
-	const writeLine = async (line: string) => {
-		if (!writer.write(line)) {
-			await new Promise<void>((resolve) => writer.once("drain", resolve));
-		}
+	console.log(`Resuming ${prefix} from ${uploaded.size} confirmed objects; checkpoint: ${checkpoint}`);
+	const handle = await fs.open(checkpoint, "a");
+	let pending: string[] = [];
+	let writes = Promise.resolve();
+	const flush = () => {
+		if (!pending.length) return writes;
+		const batch = pending;
+		pending = [];
+		writes = writes.then(async () => {
+			await handle.appendFile(batch.join("\n") + "\n", "utf8");
+			await handle.sync();
+		});
+		return writes;
 	};
-
-	await streamJsonStringArray(legacyUploadedFilesPath, async (value) => {
-		count++;
-		await writeLine(`${value}\n`);
-	});
-
-	await new Promise<void>((resolve, reject) => {
-		writer.once("error", reject);
-		writer.end(resolve);
-	});
-
-	return count;
-}
-
-async function main() {
-	let uploadedFilesCount = await migrateUploadedFiles();
-
-	console.log(`Resuming from ${uploadedFilesCount} uploaded files.`);
-
-	const addedUploadedFiles: string[] = [];
-	const uploadedFilesFD = await fs.open(uploadedFilesPath, "a+");
-
-	setInterval(() => {
-		if (!addedUploadedFiles.length) {
-			return;
-		}
-		const pending = addedUploadedFiles.splice(0, addedUploadedFiles.length);
-		fs.appendFile(uploadedFilesFD, pending.join("\n") + "\n", "utf-8").catch(() => {});
-	}, 1000 * 10);
-
-	async function* readDirRecursive(dir: string): AsyncGenerator<string> {
-		try {
-			const entries = await fs.readdir(dir, { withFileTypes: true });
-			for (const entry of entries) {
-				const fullPath = `${dir}/${entry.name}`;
-				if (entry.isDirectory()) {
-					yield* readDirRecursive(fullPath);
-				} else if (entry.isFile()) {
-					yield fullPath;
-				}
-			}
-		} catch (error) {}
+	const concurrency = options.concurrency ?? Number(process.env.S3_UPLOAD_CONCURRENCY ?? 32);
+	if (!Number.isInteger(concurrency) || concurrency < 1) {
+		await handle.close();
+		throw new Error("S3_UPLOAD_CONCURRENCY must be a positive integer");
 	}
-
-	const args = process.argv.slice(2);
-	if (args.length < 1) {
-		console.error("Usage: ts-node scripts/s3_upload_directory.ts <directory_path>");
-		process.exit(1);
-	}
-
-	const directoryPath = resolve(args[0]);
-	const prefix = args[1] || "";
-	const concurrency = 20;
-
 	const queue = new PQueue({ concurrency });
-
-	console.log(`Reading files from directory: ${directoryPath}`);
-
-	let i = 0;
-
-	for await (const filePath of readDirRecursive(directoryPath)) {
-		try {
-			if (i++ < uploadedFilesCount) {
+	const uploadFile = options.uploadFile ?? (async (filePath, key) => {
+		await awsS3.send(new PutObjectCommand({
+			Bucket: process.env.S3_BUCKET_NAME,
+			Key: key,
+			Body: await fs.readFile(filePath),
+			ContentType: filePath.endsWith(".png") ? "image/png" : "application/octet-stream",
+		}));
+	});
+	let completed = 0;
+	let skipped = 0;
+	let failed = 0;
+	let checkpointError: unknown;
+	const report = setInterval(() => {
+		console.log(`S3: ${completed} uploaded, ${skipped} skipped, ${failed} failed, ${queue.pending} active`);
+		void flush().catch((error) => { checkpointError = error; });
+	}, 10_000);
+	report.unref();
+	try {
+		for await (const filePath of filesUnder(root)) {
+			if (failed || checkpointError) break;
+			const name = relative(root, filePath).split("\\").join("/");
+			const key = prefix ? `${prefix}/${name}` : name;
+			if (uploaded.has(key)) {
+				skipped++;
 				continue;
 			}
-
-			const key = prefix + "/" + relative(directoryPath, filePath);
-
-			process.stdout.write(`\r${i++} - Uploading: ${key}               `);
-
-			queue.add(async () => {
-				await uploadToS3({
-					content: await fs.readFile(filePath),
-					key,
-				});
-				addedUploadedFiles.push(filePath);
+			void queue.add(async () => {
+				await uploadFile(filePath, key);
+				uploaded.add(key);
+				pending.push(JSON.stringify(key));
+				completed++;
+				if (pending.length >= 1000) await flush();
+			}).catch((error) => {
+				failed++;
+				console.error(`Failed to upload ${key}:`, error);
 			});
-
 			await queue.onSizeLessThan(concurrency);
-		} catch (error) {
-			console.error(`\nError uploading file ${filePath}:`, error);
 		}
+		await queue.onIdle();
+		await flush();
+		if (checkpointError) throw checkpointError;
+		if (failed) throw new Error(`${failed} uploads failed; snapshot must not be published`);
+		console.log(`S3 complete: ${completed} uploaded, ${skipped} already present`);
+		return { completed, skipped };
+	} finally {
+		clearInterval(report);
+		await queue.onIdle();
+		try { await flush(); } finally { await handle.close(); }
 	}
-
-	await queue.onIdle();
-
-	process.exit();
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+	try {
+		if (!process.argv[2]) throw new Error("Usage: node scripts/s3_upload_directory.ts <directory> [prefix]");
+		for (const name of ["S3_BUCKET_NAME", "S3_ACCESS_KEY_ID", "S3_SECRET_KEY", "S3_REGION", "S3_ENDPOINT"]) {
+			if (!process.env[name]) throw new Error(`Missing required environment variable ${name}`);
+		}
+		await uploadDirectory(process.argv[2], process.argv[3] ?? "");
+	} catch (error) {
+		console.error(error);
+		process.exitCode = 1;
+	} finally {
+		awsS3.destroy();
+	}
+}

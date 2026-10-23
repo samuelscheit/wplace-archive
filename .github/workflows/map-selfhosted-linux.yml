@@ -22,6 +22,10 @@ permissions:
     contents: write # needed to create / update releases
     actions: read
 
+concurrency:
+    group: wplace-archive-respond5
+    cancel-in-progress: false
+
 jobs:
     build:
         runs-on: [self-hosted, Linux, X64, respond5]

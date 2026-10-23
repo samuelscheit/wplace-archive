@@ -3,7 +3,7 @@ import math
 import shutil
 from pathlib import Path
 from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 
 # ---- concurrency defaults (overridable via env) ----
 CPU_CORES = int(os.cpu_count() * 1.5)
@@ -15,11 +15,14 @@ WORKERS = int(os.environ["TILE_JOBS"])
 # Import pyvips after setting VIPS_CONCURRENCY so it takes effect
 import pyvips
 
+# Millions of independent tiles must not accumulate cached image pipelines.
+pyvips.cache_set_max(0)
+
 BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
-TILES_DIR = os.path.join(BASE_DIR, "..", "public", "tiles", "11")   # tiles/YYYY/XXXX.png (4-digit padded)
+TILES_DIR = os.path.join(os.environ.get("TILES_ROOT", os.path.join(BASE_DIR, "..", "public", "tiles")), "11")   # tiles/YYYY/XXXX.png (4-digit padded)
 
 IN_ROOT = Path(TILES_DIR)
-OUT_ROOT = Path(os.path.join(BASE_DIR, "..", "public", "tiles"))
+OUT_ROOT = IN_ROOT.parent
 
 TILE_SIZE = 1000          # your tile pixel size
 
@@ -162,7 +165,13 @@ def build_parent_levels(out_root: Path, z_base: int, blank_png: Path, min_z: int
         # Ensure sRGB interpretation for consistent brightness in viewers
         # parent = parent.copy(interpretation=pyvips.Interpretation.SRGB)
 
-        parent.write_to_file(str(dst))
+        # A stopped run must never leave a truncated PNG that a retry skips.
+        temporary = dst.with_suffix(".tmp.png")
+        try:
+            parent.write_to_file(str(temporary))
+            os.replace(temporary, dst)
+        finally:
+            temporary.unlink(missing_ok=True)
         # parent.pngsave(str(dst), palette=True, bitdepth=8, Q=100, dither=0, effort=10)
 
     for level in range(z_base - 1, min_z - 1, -1):
@@ -177,11 +186,23 @@ def build_parent_levels(out_root: Path, z_base: int, blank_png: Path, min_z: int
         for x in range(dim_parent):
             ensure_dir(parent_root / str(x), made_dirs)
 
-        tasks = [(X, Y) for Y in range(dim_parent) for X in range(dim_parent)]
+        tasks = iter((X, Y) for X in range(dim_parent) for Y in range(dim_parent))
         with ThreadPoolExecutor(max_workers=WORKERS) as ex:
-            futures = [ex.submit(process_tile, child_root, parent_root, X, Y) for (X, Y) in tasks]
-            for _ in tqdm(as_completed(futures), total=len(tasks), desc=f"Build z={level}"):
-                pass
+            pending = set()
+            with tqdm(total=dim_parent ** 2, desc=f"Build z={level}", mininterval=30) as progress:
+                while True:
+                    while len(pending) < WORKERS * 2:
+                        task = next(tasks, None)
+                        if task is None:
+                            break
+                        pending.add(ex.submit(process_tile, child_root, parent_root, *task))
+                    if not pending:
+                        break
+                    done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                    for future in done:
+                        # Propagate decoder/write errors instead of publishing an incomplete pyramid.
+                        future.result()
+                        progress.update(1)
 
 def main():
     OUT_ROOT.mkdir(parents=True, exist_ok=True)

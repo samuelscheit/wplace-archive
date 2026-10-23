@@ -46,3 +46,7 @@ vips-properties.xml
 build/
 
 demo-visited-feature.html
+# Durable upload checkpoints
+scripts/.s3-upload-state/
+__pycache__/
+public/.resume-state/
