@@ -32,6 +32,17 @@ jobs:
         timeout-minutes: 1440
 
         steps:
+            - name: Protect unpublished snapshots from checkout cleanup
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  shopt -s nullglob
+                  for state in public/.resume-state/world-*; do
+                      if [[ -d "$state" && ! -f "$state/snapshot.complete" ]]; then
+                          echo "::error::Unpublished snapshot $(basename "$state"); use the resume workflow before starting a new download."
+                          exit 1
+                      fi
+                  done
             - uses: actions/checkout@v4
             - name: Create Release ID
               run: |
