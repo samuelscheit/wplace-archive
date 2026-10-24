@@ -77,7 +77,7 @@ jobs:
             - name: Test continuation scripts
               run: |
                   .venv/bin/python -m unittest discover -s tests -p test_vips.py -v
-                  node --test tests/s3_upload_directory.test.ts tests/verify_s3_snapshot.test.ts tests/prepare_snapshot_release.test.ts
+                  node --test tests/s3_upload_directory.test.ts tests/verify_s3_snapshot.test.ts tests/prepare_snapshot_release.test.ts tests/upload_snapshot_assets.test.ts
             - name: Generate zoom levels 10 through 0 from existing level 11
               run: |
                   set -euo pipefail
@@ -108,19 +108,7 @@ jobs:
             - name: Upload release assets without publishing an incomplete snapshot
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: |
-                  set -euo pipefail
-                  for asset in "$STATE_DIR"/tiles.tar.gz.part.* "$STATE_DIR/tiles.sha256"; do
-                      name=$(basename "$asset")
-                      size=$(stat -c %s "$asset")
-                      remote_size=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_ID" \
-                          --jq ".assets[] | select(.name == \"$name\" and .state == \"uploaded\") | .size")
-                      if [[ "$remote_size" == "$size" ]]; then
-                          echo "Already uploaded: $name ($size bytes)"
-                      else
-                          gh release upload "$RELEASE_ID" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
-                      fi
-                  done
+              run: bash scripts/upload_snapshot_assets.sh
             - name: Upload all tiles to the preserved S3 prefix
               env:
                   S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
