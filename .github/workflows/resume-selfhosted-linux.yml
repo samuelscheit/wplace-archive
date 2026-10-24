@@ -25,6 +25,10 @@ jobs:
         timeout-minutes: 1440
         env:
             RELEASE_ID: ${{ inputs.release_id }}
+            # Resolve the default branch at release creation, not a stale run SHA.
+            # An older SHA with different workflow files needs workflows:write,
+            # which GITHUB_TOKEN cannot receive.
+            RELEASE_TARGET: ${{ github.event.repository.default_branch }}
             EXPECTED_BASE_TILES: ${{ inputs.expected_base_tiles }}
             TILE_JOBS: "4"
             VIPS_CONCURRENCY: "1"
@@ -66,10 +70,14 @@ jobs:
                   done
                   command -v pigz
                   mkdir -p "$STATE_DIR"
+            - name: Prepare draft release and validate release authorization
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: bash scripts/prepare_snapshot_release.sh
             - name: Test continuation scripts
               run: |
                   .venv/bin/python -m unittest discover -s tests -p test_vips.py -v
-                  node --test tests/s3_upload_directory.test.ts tests/verify_s3_snapshot.test.ts
+                  node --test tests/s3_upload_directory.test.ts tests/verify_s3_snapshot.test.ts tests/prepare_snapshot_release.test.ts
             - name: Generate zoom levels 10 through 0 from existing level 11
               run: |
                   set -euo pipefail
@@ -102,10 +110,6 @@ jobs:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   set -euo pipefail
-                  if ! gh release view "$RELEASE_ID" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-                      gh release create "$RELEASE_ID" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                          --draft --prerelease --title "$RELEASE_ID" --notes "Archived world snapshot; concatenate tiles.tar.gz.part.* before extracting."
-                  fi
                   for asset in "$STATE_DIR"/tiles.tar.gz.part.* "$STATE_DIR/tiles.sha256"; do
                       name=$(basename "$asset")
                       size=$(stat -c %s "$asset")
@@ -136,7 +140,7 @@ jobs:
             - name: Publish the verified release
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: gh release edit "$RELEASE_ID" --draft=false --prerelease --repo "$GITHUB_REPOSITORY"
+              run: gh release edit "$RELEASE_ID" --target "$RELEASE_TARGET" --draft=false --prerelease --repo "$GITHUB_REPOSITORY"
             - name: Update and commit snapshots.json only after successful uploads
               run: |
                   set -euo pipefail
