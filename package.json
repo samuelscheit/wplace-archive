@@ -6,7 +6,6 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "tsc -b && vite build",
-		"preview": "vite preview --host 0.0.0.0",
 		"compile": "node-gyp configure build",
 		"archive:world": "node scripts/archive_world.ts"
 	},

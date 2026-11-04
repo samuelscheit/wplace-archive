@@ -1,0 +1,52 @@
+name: Deploy
+
+on:
+    push:
+        branches: [main]
+    # Snapshot workflows push src/ui/snapshots.json with GITHUB_TOKEN, and pushes made
+    # with GITHUB_TOKEN never trigger other workflows. Redeploy when they finish instead.
+    workflow_run:
+        workflows:
+            - Generate world map (self hosted linux)
+            - Resume archived world map (no tile downloads)
+        types: [completed]
+        branches: [main]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    pages: write
+    id-token: write
+
+concurrency:
+    group: pages
+    cancel-in-progress: true
+
+jobs:
+    build:
+        if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            # workflow_run runs against the default branch head, which already contains the
+            # snapshots.json commit pushed by the finished snapshot workflow.
+            - uses: actions/checkout@v7
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 24
+                  cache: npm
+            - run: npm ci --ignore-scripts
+            - run: npm run build
+            - uses: actions/upload-pages-artifact@v5
+              with:
+                  path: dist
+
+    deploy:
+        needs: build
+        runs-on: ubuntu-latest
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - id: deployment
+              uses: actions/deploy-pages@v5

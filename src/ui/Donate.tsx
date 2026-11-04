@@ -1,6 +1,6 @@
 import { AnchorHTMLAttributes } from "react";
 
-function DonateButton({ button, type, method, ...props }: AnchorHTMLAttributes<any> & { method?: string; button?: boolean }) {
+function DonateButton({ button, type, ...props }: AnchorHTMLAttributes<any> & { button?: boolean }) {
 	const Component = button ? "button" : "a";
 
 	return (
@@ -8,16 +8,6 @@ function DonateButton({ button, type, method, ...props }: AnchorHTMLAttributes<a
 			target="_blank"
 			{...props}
 			rel="noreferrer"
-			onClick={(e) => {
-				// @ts-ignore
-				globalThis?.plausible?.("donate_button", {
-					props: {
-						method: method,
-					},
-				});
-
-				props.onClick?.(e);
-			}}
 			className={
 				"inline-flex items-center justify-center gap-2 self-start rounded px-3 py-1.5 text-sm font-medium text-neutral-50 shadow cursor-pointer " +
 				props.className
@@ -79,7 +69,7 @@ export function Donate({
 				</div>
 
 				<div className="flex flex-row gap-2 text-white flex-wrap items-stretch">
-					<DonateButton href="https://www.paypal.me/samuelscheit" style={{ backgroundColor: "#0070e0" }} method="paypal">
+					<DonateButton href="https://www.paypal.me/samuelscheit" style={{ backgroundColor: "#0070e0" }}>
 						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" className="size-4">
 							<path
 								fill="currentColor"
@@ -88,7 +78,7 @@ export function Donate({
 						</svg>
 						PayPal
 					</DonateButton>
-					<DonateButton href="https://buymeacoffee.com/samuelscheit" style={{ backgroundColor: "#52a447" }} method="buymeacoffee">
+					<DonateButton href="https://buymeacoffee.com/samuelscheit" style={{ backgroundColor: "#52a447" }}>
 						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" className="size-4">
 							<path
 								fill="white"
@@ -97,7 +87,7 @@ export function Donate({
 						</svg>
 						Credit Card
 					</DonateButton>
-					<DonateButton href="https://www.patreon.com/samuelscheit" style={{ backgroundColor: "#F96854" }} method="patreon">
+					<DonateButton href="https://www.patreon.com/samuelscheit" style={{ backgroundColor: "#F96854" }}>
 						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" className="size-4">
 							<path
 								fill="currentColor"
@@ -106,7 +96,7 @@ export function Donate({
 						</svg>
 						Patreon
 					</DonateButton>
-					<DonateButton href="https://github.com/sponsors/samuelscheit" style={{ backgroundColor: "#000" }} method="github">
+					<DonateButton href="https://github.com/sponsors/samuelscheit" style={{ backgroundColor: "#000" }}>
 						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" className="size-4">
 							<path
 								fill="currentColor"
@@ -118,7 +108,6 @@ export function Donate({
 					<DonateButton
 						href="weixin://f2f0rDQ70Abyvo1lrYLWspwEaazwrU6NgzFdu6uCGfuGJsc"
 						style={{ backgroundColor: "#0e9dec" }}
-						method="wechat"
 						onClick={openWeChat}
 						aria-haspopup="dialog"
 						aria-controls="wechat-modal" // @ts-ignore
@@ -134,7 +123,6 @@ export function Donate({
 						WeChat
 					</DonateButton>
 					<DonateButton
-						method="bank_transfer"
 						type="button"
 						onClick={openBankTransfer}
 						button
@@ -148,7 +136,7 @@ export function Donate({
 						</svg>
 						Bank transfer
 					</DonateButton>
-					<DonateButton method="crypto" onClick={openCrypto} button style={{ backgroundColor: "#f7931a" }}>
+					<DonateButton onClick={openCrypto} button style={{ backgroundColor: "#f7931a" }}>
 						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" className="size-4">
 							<path
 								fill="currentColor"

@@ -512,12 +512,7 @@ function App() {
 			URL.revokeObjectURL(url);
 
 			setIsTakingScreenshot(false);
-
-			// @ts-ignore
-			globalThis?.plausible?.("screenshot");
 		} catch (error) {
-			// @ts-ignore
-			globalThis?.plausible?.("screenshot_error");
 			console.error("Screenshot error", error);
 			if (error instanceof Error && error.message.includes("Maximum call stack size exceeded")) {
 				setErrorScreenshot("The requested screenshot is too large. Please zoom further in and try again.");
@@ -528,9 +523,6 @@ function App() {
 	};
 
 	const openAbout = useCallback(() => {
-		// @ts-ignore
-		globalThis?.plausible?.("about");
-
 		const lang = globalThis.navigator?.language?.split("-")[0] || "en";
 		// @ts-ignore
 		globalThis.googleTranslateElementInit = () => {
@@ -558,9 +550,6 @@ function App() {
 	}, []);
 	const closeAbout = useCallback(() => setIsAboutOpen(false), []);
 	const openDonate = useCallback(() => {
-		// @ts-ignore
-		globalThis?.plausible?.("donate");
-
 		setIsDonateOpen(true);
 	}, []);
 	const closeDonate = useCallback(() => {

@@ -15,8 +15,4 @@ export default defineConfig({
       preflightContinue: true,
     }
   },
-  preview: {
-    allowedHosts: true
-  },
-  
 })
